@@ -1,4 +1,5 @@
 export * from './fare';
+export * from './comparison';
 export * from './money';
 export * from './subscription';
 export * from './vesting';

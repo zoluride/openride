@@ -1,5 +1,6 @@
 import {
   calculateDailyDeduction,
+  calculateCompetitorComparison,
   calculateTopUp,
   calculateVestingPercentage,
   checkDriverCompliance,
@@ -16,6 +17,42 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { signOut } from '../lib/auth';
 import { fetchMyVehicles, type DriverDocument, type Vehicle } from '../lib/driver-state';
+
+interface DemoScenario {
+  id: string;
+  label: string;
+  grossEarningsNaira: number;
+  tripsToday: number;
+  hoursOnlineToday: number;
+  lifetimeTrips: number;
+}
+
+const DEMO_SCENARIOS: DemoScenario[] = [
+  {
+    id: 'free-day',
+    label: 'Free Day',
+    grossEarningsNaira: 3_200,
+    tripsToday: 2,
+    hoursOnlineToday: 3.5,
+    lifetimeTrips: 120,
+  },
+  {
+    id: 'top-up-eligible',
+    label: 'Top-Up Eligible',
+    grossEarningsNaira: 14_000,
+    tripsToday: 6,
+    hoursOnlineToday: 8.5,
+    lifetimeTrips: 350,
+  },
+  {
+    id: 'max-cap-and-vested',
+    label: 'Max Cap & Vested',
+    grossEarningsNaira: 35_000,
+    tripsToday: 14,
+    hoursOnlineToday: 10,
+    lifetimeTrips: 750,
+  },
+];
 
 interface Props {
   driverId: string;
@@ -50,16 +87,23 @@ export function HomeScreen({
   onGoOffline,
   onReport,
 }: Props) {
-  const grossEarningsKobo = grossEarningsNaira === null ? null : Math.round(grossEarningsNaira * 100);
+  const [demoScenario, setDemoScenario] = useState<DemoScenario | null>(null);
+  const currentGrossEarningsNaira = demoScenario?.grossEarningsNaira ?? grossEarningsNaira;
+  const currentTripsToday = demoScenario?.tripsToday ?? completedTripsToday;
+  const currentHoursOnlineToday = demoScenario?.hoursOnlineToday ?? hoursOnlineToday;
+  const currentLifetimeTrips = demoScenario?.lifetimeTrips ?? completedTrips;
+  const grossEarningsKobo =
+    currentGrossEarningsNaira === null ? null : Math.round(currentGrossEarningsNaira * 100);
   const deductionKobo = grossEarningsKobo === null ? null : calculateDailyDeduction(grossEarningsKobo);
   const remainingCapKobo = deductionKobo === null ? null : remainingCapForDay(deductionKobo);
   const freeDay = grossEarningsKobo !== null && isFreeDay(grossEarningsKobo);
-  const vestingPercentage = completedTrips === null ? null : calculateVestingPercentage(completedTrips);
-  const vestingMilestoneStatus = completedTrips === null ? null : getVestingMilestoneStatus(completedTrips);
+  const comparison = grossEarningsKobo === null ? null : calculateCompetitorComparison(grossEarningsKobo);
+  const vestingPercentage = currentLifetimeTrips === null ? null : calculateVestingPercentage(currentLifetimeTrips);
+  const vestingMilestoneStatus = currentLifetimeTrips === null ? null : getVestingMilestoneStatus(currentLifetimeTrips);
   const fundAllocationKobo =
-    grossEarningsKobo === null || completedTripsToday === null || hoursOnlineToday === null
+    grossEarningsKobo === null || currentTripsToday === null || currentHoursOnlineToday === null
       ? null
-      : calculateTopUp(grossEarningsKobo, hoursOnlineToday, completedTripsToday);
+      : calculateTopUp(grossEarningsKobo, currentHoursOnlineToday, currentTripsToday);
   const compliance = checkDriverCompliance(driverDocuments);
   const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles ?? []);
   const [selected, setSelected] = useState<string | null>(mockVehicles?.[0]?.id ?? null);
@@ -139,6 +183,37 @@ export function HomeScreen({
         </View>
       </View>
 
+      {__DEV__ ? (
+        <View style={styles.scenarioCard}>
+          <View style={styles.scenarioHeader}>
+            <Text style={styles.scenarioTitle}>Dev Demo Scenarios</Text>
+            <Pressable onPress={() => setDemoScenario(null)} hitSlop={8} accessibilityRole="button">
+              <Text style={styles.liveDataButton}>Live Data</Text>
+            </Pressable>
+          </View>
+          <View style={styles.scenarioButtons}>
+            {DEMO_SCENARIOS.map((scenario) => (
+              <Pressable
+                key={scenario.id}
+                style={[styles.scenarioButton, demoScenario?.id === scenario.id && styles.scenarioButtonActive]}
+                onPress={() => setDemoScenario(scenario)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: demoScenario?.id === scenario.id }}
+              >
+                <Text
+                  style={[
+                    styles.scenarioButtonText,
+                    demoScenario?.id === scenario.id && styles.scenarioButtonTextActive,
+                  ]}
+                >
+                  {scenario.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.fund}>
         <Text style={styles.fundTitle}>Stabilisation Fund</Text>
         <View style={styles.fundRow}>
@@ -160,21 +235,29 @@ export function HomeScreen({
           <View style={styles.comparisonColumn}>
             <Text style={styles.zoluLabel}>ZOLU</Text>
             <Text style={styles.comparisonCaption}>Net</Text>
-            <Text style={styles.zoluFare}>{formatKobo(250_000)}</Text>
+            <Text style={styles.zoluFare}>{comparison === null ? 'Unavailable' : formatKobo(comparison.zoluNetKobo)}</Text>
           </View>
           <View style={styles.comparisonColumn}>
             <Text style={styles.competitorLabel}>Uber</Text>
             <Text style={styles.comparisonCaption}>Net</Text>
-            <Text style={styles.competitorFare}>{formatKobo(187_500)}</Text>
+            <Text style={styles.competitorFare}>
+              {comparison === null ? 'Unavailable' : formatKobo(comparison.uberNetKobo)}
+            </Text>
           </View>
           <View style={styles.comparisonColumn}>
             <Text style={styles.competitorLabel}>Bolt</Text>
             <Text style={styles.comparisonCaption}>Net</Text>
-            <Text style={styles.competitorFare}>{formatKobo(200_000)}</Text>
+            <Text style={styles.competitorFare}>
+              {comparison === null ? 'Unavailable' : formatKobo(comparison.boltNetKobo)}
+            </Text>
           </View>
         </View>
       </View>
-      <Text style={styles.comparisonBanner}>You earned {formatKobo(62_500)} more with ZOLU.</Text>
+      <Text style={styles.comparisonBanner}>
+        {comparison === null
+          ? 'Earnings comparison unavailable.'
+          : `You kept ${formatKobo(comparison.savingsVsUberKobo)} more than Uber today.`}
+      </Text>
 
       <View style={styles.vesting}>
         <View style={styles.vestingHeader}>
@@ -192,7 +275,9 @@ export function HomeScreen({
         </View>
         <View style={styles.vestingDetails}>
           <Text style={styles.vestingText}>
-            {completedTrips === null ? 'Trips unavailable' : `${completedTrips} / ${VESTING_TARGET_TRIPS} trips`}
+            {currentLifetimeTrips === null
+              ? 'Trips unavailable'
+              : `${currentLifetimeTrips} / ${VESTING_TARGET_TRIPS} trips`}
           </Text>
           <Text style={styles.vestingText}>
             {vestingMilestoneStatus === null
@@ -277,6 +362,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   earningsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
+  scenarioCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.md, marginBottom: spacing.md, gap: spacing.sm },
+  scenarioHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  scenarioTitle: { fontSize: typography.size.sm, fontWeight: '600' },
+  liveDataButton: { color: colors.brandDark, fontSize: typography.size.xs, fontWeight: '600' },
+  scenarioButtons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.xs },
+  scenarioButton: { width: '48%', minHeight: 34, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 4, paddingHorizontal: spacing.xs },
+  scenarioButtonActive: { backgroundColor: colors.brandDark, borderColor: colors.brandDark },
+  scenarioButtonText: { color: colors.text, fontSize: typography.size.xs, fontWeight: '600', textAlign: 'center' },
+  scenarioButtonTextActive: { color: '#fff' },
   fund: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.md, marginBottom: spacing.lg, gap: spacing.sm },
   fundTitle: { fontSize: typography.size.md, fontWeight: '600', marginBottom: spacing.xs },
   fundRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
