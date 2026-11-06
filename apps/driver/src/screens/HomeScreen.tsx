@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ZoluLogo } from '../components/ZoluLogo';
 import { signOut } from '../lib/auth';
 import { fetchMyVehicles, type DriverDocument, type Vehicle } from '../lib/driver-state';
 
@@ -146,7 +147,13 @@ export function HomeScreen({
   return (
     <SafeAreaView style={styles.container} edges={['top', 'right', 'bottom', 'left']}>
       <View style={styles.header}>
-        <Text style={styles.hi}>{displayName ?? 'Driver'}</Text>
+        <View style={styles.brandHeading}>
+          <ZoluLogo size={36} />
+          <View>
+            <Text style={styles.hi}>{displayName ?? 'Driver'}</Text>
+            <Text style={styles.brandLabel}>ZOLU Driver</Text>
+          </View>
+        </View>
         <View style={styles.headerLinks}>
           <Pressable onPress={onDocuments} hitSlop={8}>
             <Text style={styles.link}>Documents</Text>
@@ -361,6 +368,8 @@ export function HomeScreen({
 const styles = StyleSheet.create({
   container: { flex: 1, padding: spacing.xl, backgroundColor: colors.surface },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
+  brandHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
+  brandLabel: { color: colors.textMuted, fontSize: typography.size.xs, fontWeight: '600' },
   hi: { fontSize: typography.size.lg, fontWeight: '600' },
   headerLinks: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   link: { color: colors.brandDark, fontSize: typography.size.sm, fontWeight: '600' },

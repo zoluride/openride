@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ZoluLogo } from '../components/ZoluLogo';
 import {
   type DriverDocument,
   type DriverDocumentType,
@@ -62,7 +63,10 @@ export function DocumentsScreen({ documents, onBack, onSubmit, onMockAdminVerify
       <Pressable onPress={onBack} hitSlop={8} style={styles.back}>
         <Text style={styles.backText}>Back</Text>
       </Pressable>
-      <Text style={styles.title}>Driver documents</Text>
+      <View style={styles.titleHeader}>
+        <ZoluLogo size={28} />
+        <Text style={styles.title}>Driver documents</Text>
+      </View>
       <Text style={styles.muted}>
         {preview ? 'Lagos driver compliance records' : 'Submit your documents for admin review.'}
       </Text>
@@ -142,6 +146,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: spacing.xl, backgroundColor: colors.surface },
   back: { alignSelf: 'flex-start', marginBottom: spacing.lg },
   backText: { color: colors.brandDark, fontSize: typography.size.md, fontWeight: '600' },
+  titleHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   title: { fontSize: typography.size.xl, fontWeight: '700', marginBottom: spacing.xs },
   muted: { color: colors.textMuted, fontSize: typography.size.sm },
   list: { marginTop: spacing.xl, borderTopWidth: 1, borderColor: colors.border },

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ZoluLogo } from '../components/ZoluLogo';
 import { supabase } from '../lib/supabase';
 
 const CATEGORIES = [
@@ -57,9 +58,12 @@ export function ReportIncidentScreen({
   return (
     <SafeAreaView style={styles.container} edges={['top', 'right', 'bottom', 'left']}>
       <View style={styles.header}>
+        <View style={styles.titleHeader}>
+          <ZoluLogo size={28} />
           <Text style={styles.title}>Report an issue</Text>
+        </View>
         <Pressable onPress={onDone} hitSlop={8}>
-            <Text style={styles.cancel}>{submitted ? 'Done' : 'Cancel'}</Text>
+          <Text style={styles.cancel}>{submitted ? 'Done' : 'Cancel'}</Text>
         </Pressable>
       </View>
 
@@ -106,6 +110,7 @@ export function ReportIncidentScreen({
 const styles = StyleSheet.create({
   container: { flex: 1, padding: spacing.xl, backgroundColor: colors.surface },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  titleHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   title: { fontSize: typography.size.xl, fontWeight: '600' },
   cancel: { color: colors.textMuted, fontWeight: '600' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },

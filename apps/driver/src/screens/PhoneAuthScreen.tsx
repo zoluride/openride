@@ -1,8 +1,9 @@
 import { colors, spacing, typography } from '@openride/ui';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ZoluLogo } from '../components/ZoluLogo';
 import { sendOtp, verifyOtp } from '../lib/auth';
 
 export function PhoneAuthScreen({ onDevBypass }: { onDevBypass: () => void }) {
@@ -39,7 +40,10 @@ export function PhoneAuthScreen({ onDevBypass }: { onDevBypass: () => void }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'right', 'bottom', 'left']}>
-      <Text style={styles.title}>ZOLU Driver</Text>
+      <View style={styles.brand}>
+        <ZoluLogo size={72} />
+        <Text style={styles.title}>ZOLU Driver</Text>
+      </View>
       <Text style={styles.subtitle}>
         {stage === 'phone' ? 'Sign in with your driver phone number' : `Code sent to ${phone}`}
       </Text>
@@ -93,7 +97,8 @@ export function PhoneAuthScreen({ onDevBypass }: { onDevBypass: () => void }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: spacing.xl, justifyContent: 'center', backgroundColor: colors.surface },
-  title: { fontSize: typography.size.xxl, fontWeight: '700', color: colors.brandDark, marginBottom: spacing.sm },
+  brand: { alignItems: 'flex-start', gap: spacing.md, marginBottom: spacing.lg },
+  title: { fontSize: typography.size.xxl, fontWeight: '700', color: colors.brandDark },
   subtitle: { fontSize: typography.size.md, color: colors.textMuted, marginBottom: spacing.xl },
   error: {
     color: colors.danger,
