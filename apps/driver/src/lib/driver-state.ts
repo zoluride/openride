@@ -21,11 +21,17 @@ export const REQUIRED_DRIVER_DOCUMENTS = [
 ] as const;
 
 export type RequiredDocumentName = (typeof REQUIRED_DRIVER_DOCUMENTS)[number]['type'];
+export type DriverDocumentType = RequiredDocumentName | 'Hackney Permit' | 'Motor Insurance';
 
 export interface DriverDocument {
-  type: RequiredDocumentName;
+  type: DriverDocumentType;
+  label?: string;
   status: 'verified' | 'pending';
   uploaded: boolean;
+  expiresOn?: string | null;
+  expiryLabel?: string;
+  expiringSoon?: boolean;
+  renewalSubmitted?: boolean;
 }
 
 export interface ActiveTrip {

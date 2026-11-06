@@ -63,6 +63,7 @@ interface Props {
   completedTripsToday: number | null;
   hoursOnlineToday: number | null;
   driverDocuments: DriverDocument[];
+  devPreview?: boolean;
   onDocuments: () => void;
   mockVehicles?: Vehicle[];
   onSignOut?: () => void;
@@ -81,6 +82,7 @@ export function HomeScreen({
   completedTripsToday,
   hoursOnlineToday,
   driverDocuments,
+  devPreview = false,
   onDocuments,
   mockVehicles,
   onSignOut,
@@ -107,6 +109,7 @@ export function HomeScreen({
       ? null
       : calculateTopUp(grossEarningsKobo, currentHoursOnlineToday, currentTripsToday);
   const compliance = checkDriverCompliance(driverDocuments);
+  const canGoOnline = devPreview || compliance.compliant;
   const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles ?? []);
   const [selected, setSelected] = useState<string | null>(mockVehicles?.[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
@@ -338,10 +341,10 @@ export function HomeScreen({
           style={[
             styles.button,
             online ? styles.danger : styles.primary,
-            (!online && (!selected || !compliance.compliant)) && styles.disabled,
+            (!online && (!selected || !canGoOnline)) && styles.disabled,
           ]}
           onPress={toggle}
-          disabled={busy || (!online && (!selected || !compliance.compliant))}
+          disabled={busy || (!online && (!selected || !canGoOnline))}
         >
           {busy ? (
             <ActivityIndicator color="#fff" />
@@ -349,7 +352,7 @@ export function HomeScreen({
             <Text style={styles.buttonText}>{online ? 'Go offline' : 'Go online'}</Text>
           )}
         </Pressable>
-        {!compliance.compliant ? <Text style={styles.warning}>Verification Required</Text> : null}
+        {!devPreview && !compliance.compliant ? <Text style={styles.warning}>Verification Required</Text> : null}
       </View>
     </SafeAreaView>
   );

@@ -18,6 +18,7 @@ import {
   submitDriverDocuments,
   useDriverState,
   type DriverDocument,
+  type DriverDocumentType,
   type ActiveTrip,
   type PendingOffer,
   type RequiredDocumentName,
@@ -59,7 +60,11 @@ function SignedIn({ session }: { session: Session }) {
         documents={state.driverDocuments}
         onBack={() => setShowDocuments(false)}
         onSubmit={async (uploadedTypes) => {
-          await submitDriverDocuments(driverId, uploadedTypes);
+          const requiredTypes = uploadedTypes.filter(
+            (type): type is RequiredDocumentName =>
+              REQUIRED_DRIVER_DOCUMENTS.some((document) => document.type === type),
+          );
+          await submitDriverDocuments(driverId, requiredTypes);
           await state.refresh();
           setShowDocuments(false);
         }}
@@ -122,46 +127,101 @@ function SignedIn({ session }: { session: Session }) {
 const DEV_BYPASS_DRIVER_ID = 'dev-bypass-driver';
 const DEV_TRIP_ID = 'dev-preview-trip';
 const DEV_TRIP_FARE_KOBO = 450_000;
+function expiryDate(months: number, days = 0): string {
+  const date = new Date();
+  date.setMonth(date.getMonth() + months);
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
 const DEV_BYPASS_VEHICLES: Vehicle[] = [
   { id: 'dev-preview-vehicle', rego: 'DEV-001', make: 'ZOLU', model: 'Preview', vehicle_type: 'sedan' },
 ];
 
 function DevBypassHome({ onExit }: { onExit: () => void }) {
   const [showDocuments, setShowDocuments] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const [online, setOnline] = useState(false);
   const [pendingOffer, setPendingOffer] = useState<PendingOffer | null>(null);
   const [activeTrip, setActiveTrip] = useState<ActiveTrip | null>(null);
   const [grossEarningsNaira, setGrossEarningsNaira] = useState(0);
   const [completedTrips, setCompletedTrips] = useState(350);
   const [completedTripsToday, setCompletedTripsToday] = useState(0);
-  const [driverDocuments, setDriverDocuments] = useState<DriverDocument[]>(
-    REQUIRED_DRIVER_DOCUMENTS.map(({ type }) => ({ type, status: 'pending', uploaded: false })),
-  );
+  const [driverDocuments, setDriverDocuments] = useState<DriverDocument[]>(() => [
+    {
+      type: 'License',
+      label: "Nigerian Driver's Licence",
+      status: 'verified',
+      uploaded: true,
+      expiresOn: expiryDate(14),
+      expiryLabel: 'expires in 14 months',
+    },
+    {
+      type: 'LASDRI',
+      label: 'LASDRI Driver Institute Card',
+      status: 'verified',
+      uploaded: true,
+      expiresOn: expiryDate(8),
+      expiryLabel: 'expires in 8 months',
+    },
+    {
+      type: 'Hackney Permit',
+      label: 'Lagos Hackney Permit / Vehicle License',
+      status: 'verified',
+      uploaded: true,
+      expiresOn: expiryDate(0, 14),
+      expiryLabel: 'expires in 14 days',
+      expiringSoon: true,
+    },
+    {
+      type: 'Motor Insurance',
+      label: 'Comprehensive / Third-Party Motor Insurance',
+      status: 'verified',
+      uploaded: true,
+      expiresOn: expiryDate(6),
+      expiryLabel: 'expires in 6 months',
+    },
+  ]);
 
   if (showDocuments) {
     return (
       <DocumentsScreen
         driverId={DEV_BYPASS_DRIVER_ID}
         documents={driverDocuments}
+        preview
         onBack={() => setShowDocuments(false)}
-        onSubmit={async (uploadedTypes: RequiredDocumentName[]) => {
+        onSubmit={async (uploadedTypes: DriverDocumentType[]) => {
           setDriverDocuments((documents) =>
             documents.map((document) =>
-              uploadedTypes.includes(document.type) ? { ...document, uploaded: true } : document,
+              uploadedTypes.includes(document.type)
+                ? { ...document, status: 'pending', uploaded: true, renewalSubmitted: true }
+                : document,
             ),
           );
-          setShowDocuments(false);
         }}
         onMockAdminVerify={async () => {
           setDriverDocuments((documents) =>
             documents.map((document) =>
-              document.uploaded ? { ...document, status: 'verified' } : document,
+              document.renewalSubmitted
+                ? {
+                    ...document,
+                    status: 'verified',
+                    uploaded: true,
+                    renewalSubmitted: false,
+                    expiringSoon: false,
+                    expiresOn: expiryDate(12),
+                    expiryLabel: 'expires in 12 months',
+                  }
+                : document,
             ),
           );
-          setShowDocuments(false);
         }}
       />
     );
+  }
+
+  if (showReport) {
+    return <ReportIncidentScreen devPreview onDone={() => setShowReport(false)} />;
   }
 
   if (activeTrip) {
@@ -216,6 +276,7 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
       completedTripsToday={completedTripsToday}
       hoursOnlineToday={0}
       driverDocuments={driverDocuments}
+      devPreview
       mockVehicles={DEV_BYPASS_VEHICLES}
       onDocuments={() => setShowDocuments(true)}
       onSignOut={onExit}
@@ -235,7 +296,7 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
           },
         });
       }}
-      onReport={() => {}}
+      onReport={() => setShowReport(true)}
     />
   );
 }

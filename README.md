@@ -1,126 +1,73 @@
-# OpenRide
+# ZOLU
 
-> Open-source ride-booking & dispatch platform for regional operators, driver cooperatives, EV fleets, booked-hire services, and community transport.
+**ZOLU is a Lagos driver-owned mobility platform.** It gives drivers a transparent alternative to commission-led ride-hailing: capped daily platform fees, ownership earned through completed trips, and a shared stabilisation fund, alongside rider booking and operator dispatch tools.
 
-[![CI](https://img.shields.io/badge/ci-pending-lightgrey)](#)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+The product is built for Lagos streets and the people who keep them moving. Domain rules live in `packages/domain`, separate from the driver, rider, and admin interfaces.
 
-## Why this exists
+## Driver Economics
 
-Commercial ride-hailing platforms are not built for small operators, cooperatives, or community transport. They charge per-trip commissions, lock you into their terms, and don't model compliance the way regulators expect. OpenRide is a self-hostable alternative that respects transport compliance from day 1 (driver authorities, vehicle inspections, CTP, fatigue, incident logging) and gives operators control of their fleet, fares, and data.
+All monetary amounts are represented in integer kobo throughout the domain engines.
 
-This is the MVP scaffold. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the system design and the plan file at `/Users/adam/.claude/plans/you-are-acting-as-starry-starfish.md` for full scope.
+| Engine | Rule |
+| --- | --- |
+| Daily Capped Subscription | Free below ₦4,000 gross for the day; ₦500 per ₦3,000 band thereafter, capped at ₦1,500 per day. |
+| 750-Trip Ownership Vesting | Drivers vest from 0% to 100% across 150, 300, 500, and 750 completed-trip milestones. |
+| Driver Stabilisation Fund | Up to ₦3,000 top-up for drivers with at least 10 online hours and 8 completed trips, when gross earnings are below ₦20,000. |
+| Competitor Commission Comparison | Compares ZOLU's capped fee with Uber's 25% and Bolt's 20% commissions. Percentage-based net amounts are rounded to integer kobo. |
 
-## Status
+## Quickstart
 
-**MVP feature-complete (single-operator).** End-to-end loop works: rider signup → book → automatic dispatch → driver accept & drive → complete → payment → receipt, with an operator console, compliance + fatigue enforcement, and incident reporting. Payments verify against Stripe test keys; multi-operator (Phase 9) is the next milestone. See [docs/TESTING.md](docs/TESTING.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-
-## Quick start (local dev)
-
-Prereqs: Node 22, pnpm 9, Docker, the [Supabase CLI](https://supabase.com/docs/guides/cli), and (for mobile) the [Expo CLI](https://docs.expo.dev/get-started/installation/).
+Prerequisites: Node.js 22 and pnpm 9.
 
 ```bash
-# Clone
-git clone https://github.com/your-org/openride.git
-cd openride
-
-# Install
-     pnpm install
-
-# Copy env template
-cp .env.example .env.local
-
-# Start local Supabase (Postgres + PostGIS + Auth + Storage + Realtime)
-make up
-
-# Apply migrations + seed demo data
-make reset
-
-# Generate typed DB client
-make types
-
-# Run all apps in parallel
-pnpm dev
+pnpm install
+pnpm --filter @openride/domain test
+pnpm --dir apps/driver exec expo start --web
 ```
 
-Then:
+The domain test command runs the unit suite for subscription, vesting, stabilisation, competitor comparison, and the supporting fare, compliance, dispatch, fatigue, and money helpers. The driver app includes a development preview for trying the Home Screen, compliance records, incident reporting, and a simulated Lagos trip without a Supabase session.
 
-- Admin portal: http://localhost:3000
-- Rider app: scan QR from `apps/rider` (Expo Go) or open `i`/`a`
-- Driver app: scan QR from `apps/driver`
+### Optional Backend Setup
 
-Demo accounts (after `make reset`):
+Start the local Supabase stack with `pnpm db:start`. The admin console can be started separately with `pnpm --filter @openride/admin dev`. Backend services are not required for the domain unit tests or the Driver App development preview.
 
-- Admin: `admin@demo.openride` / `demo-password-change-me`
-- Rider, Driver: phone numbers in `packages/db/seeds/demo.sql`
+For local demo data, the seeded admin account is `admin@demo.openride` with password `demo-password-change-me`. Local phone authentication uses the test OTP `123456`.
 
 ## Architecture
 
-```
-Rider app (Expo)     Driver app (Expo)     Admin portal (Next.js)
-                            |
-                       Supabase
-        (Postgres+PostGIS, Auth, Realtime, Storage, Edge Functions)
-                            |
-                Stripe Connect       Valhalla        Twilio / Expo Push
-```
+The rider, driver, and admin apps use Supabase for Postgres/PostGIS, authentication, realtime updates, storage, and Edge Functions. Stripe Connect handles payment flows, and Valhalla provides routing. Domain calculations remain in `packages/domain` so the business rules are shared by the apps.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the system design.
 
-## Compliance scope
+## Compliance
 
-OpenRide stores the **records** an operator needs to demonstrate compliance: driver authorities, vehicle inspections, CTP/insurance documents with expiry tracking, fatigue sessions, incident reports, audit trails, manual override logs.
+ZOLU records driver and vehicle compliance information, including authorities, inspections, insurance, fatigue sessions, incidents, and audit history. Operators remain responsible for meeting the requirements that apply in their jurisdiction. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the current compliance baseline and extension guidance.
 
-**The operator remains the regulated entity.** Hosting OpenRide does not transfer or absolve any statutory obligation. See [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md) for the AU-generic baseline and how to add state-specific rule packs.
+## Platform Stack
 
-## Stack
+- Driver and rider apps: Expo, React Native, and TypeScript
+- Operator console: Next.js
+- Backend: Supabase with Postgres, PostGIS, Auth, Realtime, Storage, and Edge Functions
+- Payments: Stripe Connect
+- Routing: Valhalla
+- Domain tests: Vitest
 
-| Layer     | Choice                                                                         |
-| --------- | ------------------------------------------------------------------------------ |
-| Mobile    | Expo SDK 56 (React Native 0.86, React 19), TypeScript                          |
-| Web admin | Next.js 16 App Router, React 19, Tailwind                                      |
-| Backend   | Supabase (Postgres 15 + PostGIS, Auth, Realtime, Storage, Edge Functions/Deno) |
-| Realtime  | Supabase Realtime (broadcast + postgres_changes)                               |
-| Maps      | MapLibre GL Native + MapLibre GL JS                                            |
-| Tiles     | MapTiler (dev) / Protomaps (self-host prod)                                    |
-| Routing   | Valhalla (Docker)                                                              |
-| Payments  | Stripe Connect Express                                                         |
-| SMS / OTP | Twilio (via Supabase Auth)                                                     |
-| Push      | Expo Push (FCM / APNs)                                                         |
-| Email     | Resend                                                                         |
-| Tests     | Vitest, Playwright, Maestro                                                    |
+See [docs/TESTING.md](docs/TESTING.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for test and operations details.
 
-## Repository layout
+## Repository
 
-```
+```text
 apps/        rider · driver · admin
 packages/    db · domain · api-client · realtime · ui · config · testing
-services/    edge-functions · routing · ops
-infra/       supabase · docker
-docs/        ARCHITECTURE · COMPLIANCE · SECURITY · OPERATIONS · DEMO
+services/    ops · routing
+infra/       Supabase · Docker
+docs/        architecture · compliance · security · operations · demo
 ```
-
-## Roadmap
-
-- [x] Phase 0 — Repo & architecture scaffold
-- [x] Phase 1 — Auth & DB
-- [x] Phase 2 — Rider booking flow
-- [x] Phase 3 — Driver online & offers
-- [x] Phase 4 — Dispatch engine
-- [x] Phase 5 — Admin portal
-- [x] Phase 6 — Payments & receipts
-- [x] Phase 7 — Compliance & fatigue
-- [x] Phase 8 — Test, deploy, docs (RLS suite, dispatch sim, CI, deploy guide; E2E pending)
-- [ ] Phase 9+ — Multi-operator
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and PRs welcome.
-
-## Security
-
-Report security issues privately per [SECURITY.md](SECURITY.md). Please do not open public issues for vulnerabilities.
+See [CONTRIBUTING.md](CONTRIBUTING.md). For security issues, follow [SECURITY.md](SECURITY.md) and report them privately rather than opening a public issue.
 
 ## Licence
 
-[Apache-2.0](LICENSE). © OpenRide contributors.
+[Apache-2.0](LICENSE).

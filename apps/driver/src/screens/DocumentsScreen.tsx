@@ -4,35 +4,38 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
-  REQUIRED_DRIVER_DOCUMENTS,
   type DriverDocument,
-  type RequiredDocumentName,
+  type DriverDocumentType,
 } from '../lib/driver-state';
 
 interface Props {
   driverId: string;
   documents: DriverDocument[];
   onBack: () => void;
-  onSubmit: (uploadedTypes: RequiredDocumentName[]) => Promise<void>;
+  onSubmit: (uploadedTypes: DriverDocumentType[]) => Promise<void>;
   onMockAdminVerify: () => Promise<void>;
+  preview?: boolean;
 }
 
-export function DocumentsScreen({ documents, onBack, onSubmit, onMockAdminVerify }: Props) {
-  const [uploaded, setUploaded] = useState<Set<RequiredDocumentName>>(
+export function DocumentsScreen({ documents, onBack, onSubmit, onMockAdminVerify, preview = false }: Props) {
+  const [uploaded, setUploaded] = useState<Set<DriverDocumentType>>(
     () => new Set(documents.filter((document) => document.uploaded && document.status !== 'verified').map((document) => document.type)),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
-  function mockUpload(type: RequiredDocumentName): void {
+  function mockUpload(type: DriverDocumentType): void {
     setUploaded((current) => new Set(current).add(type));
   }
 
   async function submit(): Promise<void> {
     setBusy(true);
     setError(null);
+    setMessage(null);
     try {
       await onSubmit([...uploaded]);
+      setMessage(preview ? 'Renewal submitted and saved in this preview.' : 'Documents submitted for review.');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -43,8 +46,10 @@ export function DocumentsScreen({ documents, onBack, onSubmit, onMockAdminVerify
   async function mockAdminVerify(): Promise<void> {
     setBusy(true);
     setError(null);
+    setMessage(null);
     try {
       await onMockAdminVerify();
+      setMessage('Preview documents verified locally.');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -58,28 +63,47 @@ export function DocumentsScreen({ documents, onBack, onSubmit, onMockAdminVerify
         <Text style={styles.backText}>Back</Text>
       </Pressable>
       <Text style={styles.title}>Driver documents</Text>
-      <Text style={styles.muted}>Submit all three documents for admin review.</Text>
+      <Text style={styles.muted}>
+        {preview ? 'Lagos driver compliance records' : 'Submit your documents for admin review.'}
+      </Text>
 
       <View style={styles.list}>
-        {REQUIRED_DRIVER_DOCUMENTS.map(({ type }) => {
-          const document = documents.find((item) => item.type === type);
+        {documents.map((document) => {
+          const { type } = document;
           const verified = document?.status === 'verified';
           const isUploaded = uploaded.has(type);
+          const expiringSoon = document.expiringSoon ?? false;
+          const statusLabel = document.renewalSubmitted
+            ? 'Renewal submitted'
+            : expiringSoon
+              ? 'Expiring Soon'
+              : verified
+                ? 'Verified'
+                : isUploaded
+                  ? 'Uploaded'
+                  : document.uploaded
+                    ? 'Pending review'
+                    : 'Required';
+          const statusStyle = expiringSoon ? styles.warning : verified ? styles.verified : styles.muted;
+          const canRenew = expiringSoon && !document.renewalSubmitted;
           return (
             <View key={type} style={styles.documentRow}>
               <View style={styles.documentInfo}>
-                <Text style={styles.documentName}>{type}</Text>
-                <Text style={verified ? styles.verified : styles.muted}>
-                  {verified ? 'Verified' : isUploaded ? 'Uploaded' : document?.uploaded ? 'Pending review' : 'Required'}
+                <Text style={styles.documentName}>{document.label ?? type}</Text>
+                <Text style={statusStyle}>
+                  {statusLabel}
+                  {document.expiryLabel ? ` · ${document.expiryLabel}` : ''}
                 </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
-                style={[styles.uploadButton, (verified || isUploaded || busy) && styles.disabled]}
-                disabled={verified || isUploaded || busy}
+                style={[styles.uploadButton, ((verified && !canRenew) || isUploaded || busy) && styles.disabled]}
+                disabled={(verified && !canRenew) || isUploaded || busy}
                 onPress={() => mockUpload(type)}
               >
-                <Text style={styles.uploadText}>{verified ? 'Verified' : isUploaded ? 'Uploaded' : 'Mock Upload'}</Text>
+                <Text style={styles.uploadText}>
+                  {document.renewalSubmitted ? 'Submitted' : isUploaded ? 'Selected' : canRenew ? 'Renew' : verified ? 'Verified' : 'Mock Upload'}
+                </Text>
               </Pressable>
             </View>
           );
@@ -87,15 +111,18 @@ export function DocumentsScreen({ documents, onBack, onSubmit, onMockAdminVerify
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {message ? <Text style={styles.success}>{message}</Text> : null}
       <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          style={[styles.submitButton, (busy || uploaded.size === 0) && styles.disabled]}
-          disabled={busy || uploaded.size === 0}
-          onPress={() => void submit()}
-        >
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit for Review</Text>}
-        </Pressable>
+        {uploaded.size > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            style={[styles.submitButton, busy && styles.disabled]}
+            disabled={busy}
+            onPress={() => void submit()}
+          >
+            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit for Review</Text>}
+          </Pressable>
+        ) : null}
         {__DEV__ ? (
           <Pressable
             accessibilityRole="button"
@@ -103,7 +130,7 @@ export function DocumentsScreen({ documents, onBack, onSubmit, onMockAdminVerify
             disabled={busy}
             onPress={() => void mockAdminVerify()}
           >
-            <Text style={styles.submitText}>Mock Admin Verify</Text>
+            <Text style={styles.submitText}>{preview ? 'Simulate Admin Verification' : 'Mock Admin Verify'}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -130,10 +157,12 @@ const styles = StyleSheet.create({
   documentInfo: { gap: spacing.xs },
   documentName: { color: colors.text, fontSize: typography.size.md, fontWeight: '600' },
   verified: { color: colors.online, fontSize: typography.size.sm, fontWeight: '600' },
+  warning: { color: '#b45309', fontSize: typography.size.sm, fontWeight: '700' },
   uploadButton: { backgroundColor: colors.brandDark, borderRadius: 8, paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
   uploadText: { color: '#fff', fontSize: typography.size.sm, fontWeight: '600' },
   disabled: { opacity: 0.55 },
   error: { color: colors.danger, fontSize: typography.size.sm, marginTop: spacing.md },
+  success: { color: colors.online, fontSize: typography.size.sm, fontWeight: '600', marginTop: spacing.md },
   actions: { marginTop: 'auto' },
   submitButton: { backgroundColor: colors.brandDark, borderRadius: 8, padding: spacing.lg, alignItems: 'center' },
   verifyButton: { backgroundColor: colors.online, borderRadius: 8, padding: spacing.md, alignItems: 'center', marginTop: spacing.sm },
