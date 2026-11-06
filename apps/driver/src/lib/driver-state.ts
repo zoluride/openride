@@ -53,6 +53,9 @@ export interface DriverState {
   online: boolean;
   vehicleId: string | null;
   grossEarningsNaira: number | null;
+  completedTrips: number | null;
+  completedTripsToday: number | null;
+  hoursOnlineToday: number | null;
   driverDocuments: DriverDocument[];
   activeTrip: ActiveTrip | null;
   pendingOffer: PendingOffer | null;
@@ -67,6 +70,9 @@ export function useDriverState(session: Session | null): DriverState {
   const [online, setOnline] = useState(false);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
   const [grossEarningsNaira, setGrossEarningsNaira] = useState<number | null>(null);
+  const [completedTrips, setCompletedTrips] = useState<number | null>(null);
+  const [completedTripsToday, setCompletedTripsToday] = useState<number | null>(null);
+  const [hoursOnlineToday, setHoursOnlineToday] = useState<number | null>(null);
   const [driverDocuments, setDriverDocuments] = useState<DriverDocument[]>(
     REQUIRED_DRIVER_DOCUMENTS.map(({ type }) => ({ type, status: 'pending', uploaded: false })),
   );
@@ -80,7 +86,7 @@ export function useDriverState(session: Session | null): DriverState {
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(dayStart);
     dayEnd.setDate(dayEnd.getDate() + 1);
-    const [statusRes, tripRes, offerRes, earningsRes, documentsRes] = await Promise.all([
+    const [statusRes, tripRes, offerRes, earningsRes, completedTripsRes, shiftsRes, documentsRes] = await Promise.all([
       supabase
         .from('driver_status')
         .select('status, vehicle_id')
@@ -112,6 +118,16 @@ export function useDriverState(session: Session | null): DriverState {
         .gte('completed_at', dayStart.toISOString())
         .lt('completed_at', dayEnd.toISOString()),
       supabase
+        .from('trips')
+        .select('id', { count: 'exact', head: true })
+        .eq('driver_id', driverId)
+        .eq('status', 'completed'),
+      supabase
+        .from('driver_status')
+        .select('started_at, ended_at')
+        .lte('started_at', nowIso)
+        .or(`ended_at.is.null,ended_at.gt.${dayStart.toISOString()}`),
+      supabase
         .from('driver_documents')
         .select('doc_type, status')
         .eq('driver_id', driverId)
@@ -125,10 +141,25 @@ export function useDriverState(session: Session | null): DriverState {
     setPendingOffer((offerRes.data as unknown as PendingOffer) ?? null);
     if (earningsRes.error) {
       setGrossEarningsNaira(null);
+      setCompletedTripsToday(null);
     } else {
       const earningsRows = (earningsRes.data ?? []) as { final_fare_cents: number | null }[];
       const grossEarningsCents = earningsRows.reduce((total, trip) => total + (trip.final_fare_cents ?? 0), 0);
       setGrossEarningsNaira(grossEarningsCents / 100);
+      setCompletedTripsToday(earningsRows.length);
+    }
+    setCompletedTrips(completedTripsRes.error ? null : completedTripsRes.count ?? 0);
+    if (shiftsRes.error) {
+      setHoursOnlineToday(null);
+    } else {
+      const currentTimeMs = Date.now();
+      const dayStartMs = dayStart.getTime();
+      const onlineMilliseconds = (shiftsRes.data ?? []).reduce((total, shift) => {
+        const startedAtMs = Math.max(new Date(shift.started_at).getTime(), dayStartMs);
+        const endedAtMs = Math.min(shift.ended_at ? new Date(shift.ended_at).getTime() : currentTimeMs, currentTimeMs);
+        return total + Math.max(0, endedAtMs - startedAtMs);
+      }, 0);
+      setHoursOnlineToday(onlineMilliseconds / 3_600_000);
     }
     const documentRows = documentsRes.data ?? [];
     setDriverDocuments(
@@ -191,6 +222,9 @@ export function useDriverState(session: Session | null): DriverState {
     online,
     vehicleId,
     grossEarningsNaira,
+    completedTrips,
+    completedTripsToday,
+    hoursOnlineToday,
     driverDocuments,
     activeTrip,
     pendingOffer,

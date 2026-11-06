@@ -2,6 +2,7 @@ export * from './fare';
 export * from './money';
 export * from './subscription';
 export * from './vesting';
+export * from './stabilisation';
 export * from './dispatch';
 export * from './geo';
 export * from './fatigue';

@@ -1,10 +1,13 @@
 import {
   calculateDailyDeduction,
+  calculateTopUp,
   calculateVestingPercentage,
   checkDriverCompliance,
   formatKobo,
+  getVestingMilestoneStatus,
   isFreeDay,
   remainingCapForDay,
+  VESTING_TARGET_TRIPS,
 } from '@openride/domain';
 import { colors, spacing, typography } from '@openride/ui';
 import { useEffect, useState } from 'react';
@@ -19,6 +22,9 @@ interface Props {
   displayName?: string | null;
   online: boolean;
   grossEarningsNaira: number | null;
+  completedTrips: number | null;
+  completedTripsToday: number | null;
+  hoursOnlineToday: number | null;
   driverDocuments: DriverDocument[];
   onDocuments: () => void;
   mockVehicles?: Vehicle[];
@@ -33,6 +39,9 @@ export function HomeScreen({
   displayName,
   online,
   grossEarningsNaira,
+  completedTrips,
+  completedTripsToday,
+  hoursOnlineToday,
   driverDocuments,
   onDocuments,
   mockVehicles,
@@ -45,9 +54,12 @@ export function HomeScreen({
   const deductionKobo = grossEarningsKobo === null ? null : calculateDailyDeduction(grossEarningsKobo);
   const remainingCapKobo = deductionKobo === null ? null : remainingCapForDay(deductionKobo);
   const freeDay = grossEarningsKobo !== null && isFreeDay(grossEarningsKobo);
-  const completedTrips = 350;
-  const vestingPercentage = calculateVestingPercentage(completedTrips);
-  const sharesEarned = (completedTrips / 750) * 1000;
+  const vestingPercentage = completedTrips === null ? null : calculateVestingPercentage(completedTrips);
+  const vestingMilestoneStatus = completedTrips === null ? null : getVestingMilestoneStatus(completedTrips);
+  const fundAllocationKobo =
+    grossEarningsKobo === null || completedTripsToday === null || hoursOnlineToday === null
+      ? null
+      : calculateTopUp(grossEarningsKobo, hoursOnlineToday, completedTripsToday);
   const compliance = checkDriverCompliance(driverDocuments);
   const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles ?? []);
   const [selected, setSelected] = useState<string | null>(mockVehicles?.[0]?.id ?? null);
@@ -127,6 +139,22 @@ export function HomeScreen({
         </View>
       </View>
 
+      <View style={styles.fund}>
+        <Text style={styles.fundTitle}>Stabilisation Fund</Text>
+        <View style={styles.fundRow}>
+          <Text style={styles.earningLabel}>Today&apos;s pooled contribution</Text>
+          <Text style={styles.earningValue}>
+            {deductionKobo === null ? 'Unavailable' : formatKobo(deductionKobo)}
+          </Text>
+        </View>
+        <View style={styles.fundRow}>
+          <Text style={styles.earningLabel}>Potential allocation</Text>
+          <Text style={styles.earningValue}>
+            {fundAllocationKobo === null ? 'Unavailable' : formatKobo(fundAllocationKobo)}
+          </Text>
+        </View>
+      </View>
+
       <View style={styles.comparisonCard}>
         <View style={styles.comparisonColumns}>
           <View style={styles.comparisonColumn}>
@@ -151,18 +179,30 @@ export function HomeScreen({
       <View style={styles.vesting}>
         <View style={styles.vestingHeader}>
           <Text style={styles.earningLabel}>Ownership vesting</Text>
-          <Text style={styles.earningValue}>{vestingPercentage}%</Text>
+          <Text style={styles.earningValue}>
+            {vestingPercentage === null ? 'Unavailable' : `${vestingPercentage}%`}
+          </Text>
         </View>
         <View
           style={styles.progressTrack}
           accessibilityRole="progressbar"
-          accessibilityValue={{ min: 0, max: 100, now: vestingPercentage }}
+          accessibilityValue={{ min: 0, max: 100, now: vestingPercentage ?? 0 }}
         >
-          <View style={[styles.progressFill, { width: `${vestingPercentage}%` }]} />
+          <View style={[styles.progressFill, { width: `${vestingPercentage ?? 0}%` }]} />
         </View>
         <View style={styles.vestingDetails}>
-          <Text style={styles.vestingText}>{completedTrips} / 750 trips</Text>
-          <Text style={styles.vestingText}>Shares Earned: {sharesEarned.toFixed(1)}</Text>
+          <Text style={styles.vestingText}>
+            {completedTrips === null ? 'Trips unavailable' : `${completedTrips} / ${VESTING_TARGET_TRIPS} trips`}
+          </Text>
+          <Text style={styles.vestingText}>
+            {vestingMilestoneStatus === null
+              ? 'Milestone unavailable'
+              : vestingMilestoneStatus.isFullyVested
+                ? `Fully vested at ${VESTING_TARGET_TRIPS} trips`
+                : vestingMilestoneStatus.achievedMilestoneTrips > 0
+                  ? `${vestingMilestoneStatus.achievedMilestoneTrips}-trip milestone reached · ${vestingMilestoneStatus.tripsToNextMilestone} to ${vestingMilestoneStatus.nextMilestoneTrips}`
+                  : `${vestingMilestoneStatus.tripsToNextMilestone} trips to first milestone`}
+          </Text>
         </View>
       </View>
 
@@ -237,6 +277,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   earningsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
+  fund: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.md, marginBottom: spacing.lg, gap: spacing.sm },
+  fundTitle: { fontSize: typography.size.md, fontWeight: '600', marginBottom: spacing.xs },
+  fundRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
   feeDetails: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.xs },
   earningLabel: { color: colors.textMuted, fontSize: typography.size.md, flexShrink: 1 },
   earningValue: { fontSize: typography.size.md, fontWeight: '600' },
