@@ -1,7 +1,7 @@
 export const STABILISATION_GROSS_TARGET_KOBO = 2_000_000;
 export const STABILISATION_MAX_TOP_UP_KOBO = 300_000;
-export const STABILISATION_MIN_HOURS_ONLINE = 8;
-export const STABILISATION_MIN_TRIPS = 6;
+export const STABILISATION_MIN_HOURS_ONLINE = 10;
+export const STABILISATION_MIN_TRIPS = 8;
 
 export function calculateTopUp(
   grossEarningsKobo: number,

@@ -40,8 +40,8 @@ const DEMO_SCENARIOS: DemoScenario[] = [
     id: 'top-up-eligible',
     label: 'Top-Up Eligible',
     grossEarningsNaira: 14_000,
-    tripsToday: 6,
-    hoursOnlineToday: 8.5,
+    tripsToday: 9,
+    hoursOnlineToday: 10.5,
     lifetimeTrips: 350,
   },
   {
