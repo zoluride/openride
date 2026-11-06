@@ -14,6 +14,20 @@ export interface Vehicle {
   vehicle_type: string;
 }
 
+export const REQUIRED_DRIVER_DOCUMENTS = [
+  { type: 'License', docType: 'license' },
+  { type: 'LASDRI', docType: 'lasdri' },
+  { type: 'NHIA', docType: 'nhia' },
+] as const;
+
+export type RequiredDocumentName = (typeof REQUIRED_DRIVER_DOCUMENTS)[number]['type'];
+
+export interface DriverDocument {
+  type: RequiredDocumentName;
+  status: 'verified' | 'pending';
+  uploaded: boolean;
+}
+
 export interface ActiveTrip {
   id: string;
   status: string;
@@ -38,6 +52,8 @@ export interface DriverState {
   loading: boolean;
   online: boolean;
   vehicleId: string | null;
+  grossEarnings: number | null;
+  driverDocuments: DriverDocument[];
   activeTrip: ActiveTrip | null;
   pendingOffer: PendingOffer | null;
   refresh: () => Promise<void>;
@@ -50,13 +66,21 @@ export function useDriverState(session: Session | null): DriverState {
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(false);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
+  const [grossEarnings, setGrossEarnings] = useState<number | null>(null);
+  const [driverDocuments, setDriverDocuments] = useState<DriverDocument[]>(
+    REQUIRED_DRIVER_DOCUMENTS.map(({ type }) => ({ type, status: 'pending', uploaded: false })),
+  );
   const [activeTrip, setActiveTrip] = useState<ActiveTrip | null>(null);
   const [pendingOffer, setPendingOffer] = useState<PendingOffer | null>(null);
 
   const refresh = useCallback(async () => {
     if (!driverId) return;
     const nowIso = new Date().toISOString();
-    const [statusRes, tripRes, offerRes] = await Promise.all([
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+    const [statusRes, tripRes, offerRes, earningsRes, documentsRes] = await Promise.all([
       supabase
         .from('driver_status')
         .select('status, vehicle_id')
@@ -80,6 +104,18 @@ export function useDriverState(session: Session | null): DriverState {
         .order('sent_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from('trips')
+        .select('final_fare_cents')
+        .eq('driver_id', driverId)
+        .eq('status', 'completed')
+        .gte('completed_at', dayStart.toISOString())
+        .lt('completed_at', dayEnd.toISOString()),
+      supabase
+        .from('driver_documents')
+        .select('doc_type, status')
+        .eq('driver_id', driverId)
+        .in('doc_type', REQUIRED_DRIVER_DOCUMENTS.map(({ docType }) => docType)),
     ]);
 
     const status = statusRes.data as { status?: string; vehicle_id?: string } | null;
@@ -87,6 +123,24 @@ export function useDriverState(session: Session | null): DriverState {
     setVehicleId(status?.vehicle_id ?? null);
     setActiveTrip((tripRes.data as ActiveTrip) ?? null);
     setPendingOffer((offerRes.data as unknown as PendingOffer) ?? null);
+    if (earningsRes.error) {
+      setGrossEarnings(null);
+    } else {
+      const earningsRows = (earningsRes.data ?? []) as { final_fare_cents: number | null }[];
+      const grossEarningsCents = earningsRows.reduce((total, trip) => total + (trip.final_fare_cents ?? 0), 0);
+      setGrossEarnings(grossEarningsCents / 100);
+    }
+    const documentRows = documentsRes.data ?? [];
+    setDriverDocuments(
+      REQUIRED_DRIVER_DOCUMENTS.map(({ type, docType }) => {
+        const matchingDocuments = documentRows.filter((document) => document.doc_type === docType);
+        return {
+          type,
+          status: matchingDocuments.some((document) => document.status === 'approved') ? 'verified' : 'pending',
+          uploaded: matchingDocuments.length > 0,
+        };
+      }),
+    );
     setLoading(false);
   }, [driverId]);
 
@@ -95,7 +149,7 @@ export function useDriverState(session: Session | null): DriverState {
     if (!driverId) return;
     void refresh();
     const channel = supabase.channel(channels.driver(driverId));
-    for (const table of ['driver_status', 'trips', 'trip_offers']) {
+    for (const table of ['driver_status', 'trips', 'trip_offers', 'driver_documents']) {
       channel.on(
         'postgres_changes',
         { event: '*', schema: 'public', table, filter: `driver_id=eq.${driverId}` },
@@ -132,7 +186,64 @@ export function useDriverState(session: Session | null): DriverState {
     await refresh();
   }, [refresh]);
 
-  return { loading, online, vehicleId, activeTrip, pendingOffer, refresh, goOnline, goOffline };
+  return {
+    loading,
+    online,
+    vehicleId,
+    grossEarnings,
+    driverDocuments,
+    activeTrip,
+    pendingOffer,
+    refresh,
+    goOnline,
+    goOffline,
+  };
+}
+
+export async function submitDriverDocuments(driverId: string, uploadedTypes: RequiredDocumentName[]): Promise<void> {
+  const documents = REQUIRED_DRIVER_DOCUMENTS.filter(({ type }) => uploadedTypes.includes(type));
+
+  for (const { docType } of documents) {
+    const { data: existing, error: lookupError } = await supabase
+      .from('driver_documents')
+      .select('id')
+      .eq('driver_id', driverId)
+      .eq('doc_type', docType)
+      .neq('status', 'approved')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+
+    const documentData = {
+      storage_path: `mock/${driverId}/${docType}/${Date.now()}`,
+      issued_on: null,
+      expires_on: null,
+      status: 'pending' as const,
+      reviewer_id: null,
+      review_notes: null,
+    };
+    const result = existing
+      ? await supabase.from('driver_documents').update(documentData).eq('id', existing.id)
+      : await supabase.from('driver_documents').insert({ driver_id: driverId, doc_type: docType, ...documentData });
+    if (result.error) throw result.error;
+  }
+}
+
+export async function mockAdminVerifyPendingDocuments(driverId: string): Promise<void> {
+  const { data, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!data.user || data.user.id !== driverId) {
+    throw new Error('Mock Admin Verify requires a signed-in driver session.');
+  }
+
+  const { error } = await supabase
+    .from('driver_documents')
+    .update({ status: 'approved' })
+    .eq('driver_id', driverId)
+    .eq('status', 'pending')
+    .in('doc_type', REQUIRED_DRIVER_DOCUMENTS.map(({ docType }) => docType));
+  if (error) throw error;
 }
 
 /** Vehicles this driver can operate (their default vehicle(s)). */

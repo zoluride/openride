@@ -1,6 +1,7 @@
 import { formatDurationS } from '@openride/ui';
 
 import { getSupabaseServer } from '@/lib/supabase-server';
+import { VerificationScreen } from '@/screens/VerificationScreen';
 
 function inDays(n: number): string {
   const d = new Date();
@@ -13,7 +14,7 @@ export default async function CompliancePage() {
   const soon = inDays(30);
   const today = inDays(0);
 
-  const [driverDocs, vehicleDocs, lockedDrivers, openSessions, inspections, overrides, cap] =
+  const [driverDocs, vehicleDocs, lockedDrivers, openSessions, inspections, overrides, cap, driverProfiles, verificationDocuments] =
     await Promise.all([
       supabase
         .from('driver_documents')
@@ -47,10 +48,17 @@ export default async function CompliancePage() {
         .order('created_at', { ascending: false })
         .limit(15),
       supabase.from('app_config').select('value').eq('key', 'fatigue.max_drive_time_s').maybeSingle(),
+      supabase.from('driver_profiles').select('user_id'),
+      supabase
+        .from('driver_documents')
+        .select('id, driver_id, doc_type, status')
+        .in('doc_type', ['license', 'lasdri', 'nhia'])
+        .order('updated_at', { ascending: false }),
     ]);
 
   // Resolve names / regos.
   const driverIds = new Set<string>();
+  (driverProfiles.data ?? []).forEach((d: any) => driverIds.add(d.user_id));
   (driverDocs.data ?? []).forEach((d: any) => driverIds.add(d.driver_id));
   (lockedDrivers.data ?? []).forEach((d: any) => driverIds.add(d.user_id));
   (openSessions.data ?? []).forEach((s: any) => driverIds.add(s.driver_id));
@@ -70,6 +78,11 @@ export default async function CompliancePage() {
   const name = (id: string) =>
     (users as any[])?.find((u) => u.id === id)?.display_name ?? id.slice(0, 8);
   const rego = (id: string) => (vehicles as any[])?.find((v) => v.id === id)?.rego ?? id.slice(0, 8);
+  const verificationDrivers = (driverProfiles.data ?? []).map((d: any) => ({
+    id: d.user_id,
+    name: (users as any[])?.find((u) => u.id === d.user_id)?.display_name ?? null,
+    phone: (users as any[])?.find((u) => u.id === d.user_id)?.phone ?? null,
+  }));
 
   const capS = Number((cap.data as any)?.value ?? 43200);
   const expired = (d: string | null) => Boolean(d && d < today);
@@ -77,6 +90,11 @@ export default async function CompliancePage() {
   return (
     <div className="space-y-8 max-w-4xl">
       <h1 className="text-2xl font-semibold">Compliance</h1>
+
+      <VerificationScreen
+        drivers={verificationDrivers}
+        initialDocuments={verificationDocuments.data ?? []}
+      />
 
       <Section title={`Expiring / expired documents`}>
         <Table head={['Subject', 'Document', 'Status', 'Expires']}>

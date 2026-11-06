@@ -17,6 +17,7 @@
   "dependencies": {
     "@openride/api-client": "workspace:*",
     "@openride/db": "workspace:*",
+    "@openride/domain": "workspace:*",
     "@openride/realtime": "workspace:*",
     "@openride/ui": "workspace:*",
     "@react-navigation/native": "^7.3.0",
@@ -34,6 +35,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.25.2",
     "react-native-url-polyfill": "^2.0.0",
+    "react-native-web": "^0.21.2",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

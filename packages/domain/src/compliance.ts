@@ -56,3 +56,14 @@ export function evaluateCompliance(
     pending,
   };
 }
+
+export function checkDriverCompliance(
+  documents: { type: string; status: 'verified' | 'pending' }[],
+): { compliant: boolean; missing: string[] } {
+  const requiredTypes = ['License', 'LASDRI', 'NHIA'];
+  const missing = requiredTypes.filter(
+    (type) => !documents.some((document) => document.type === type && document.status === 'verified'),
+  );
+
+  return { compliant: missing.length === 0, missing };
+}

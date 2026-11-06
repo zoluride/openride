@@ -2889,6 +2889,9 @@ export type Database = {
       driver_doc_type:
         | "licence_front"
         | "licence_back"
+        | "license"
+        | "lasdri"
+        | "nhia"
         | "authority"
         | "photo"
         | "medical_cert"
@@ -3651,6 +3654,9 @@ export const Constants = {
       driver_doc_type: [
         "licence_front",
         "licence_back",
+        "license",
+        "lasdri",
+        "nhia",
         "authority",
         "photo",
         "medical_cert",

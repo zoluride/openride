@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { evaluateCompliance, type ComplianceDocument, type ComplianceRule } from './compliance';
+import {
+  checkDriverCompliance,
+  evaluateCompliance,
+  type ComplianceDocument,
+  type ComplianceRule,
+} from './compliance';
 
 const RULES: ComplianceRule[] = [
   { applies_to: 'driver', doc_type: 'licence_front', is_required: true, validity_window_days: null },
@@ -67,5 +72,26 @@ describe('evaluateCompliance', () => {
     );
     // medical_cert is not required and absent — still compliant.
     expect(v.isCompliant).toBe(true);
+  });
+});
+
+describe('checkDriverCompliance', () => {
+  it('is compliant when all required documents are verified', () => {
+    expect(
+      checkDriverCompliance([
+        { type: 'License', status: 'verified' },
+        { type: 'LASDRI', status: 'verified' },
+        { type: 'NHIA', status: 'verified' },
+      ]),
+    ).toEqual({ compliant: true, missing: [] });
+  });
+
+  it('lists required documents that are missing or pending', () => {
+    expect(
+      checkDriverCompliance([
+        { type: 'License', status: 'verified' },
+        { type: 'LASDRI', status: 'pending' },
+      ]),
+    ).toEqual({ compliant: false, missing: ['LASDRI', 'NHIA'] });
   });
 });
