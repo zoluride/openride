@@ -68,6 +68,7 @@ interface Props {
   onSignOut?: () => void;
   onGoOnline: (vehicleId: string) => Promise<void>;
   onGoOffline: () => Promise<void>;
+  onSimulateRideOffer?: () => void;
   onReport: () => void;
 }
 
@@ -85,6 +86,7 @@ export function HomeScreen({
   onSignOut,
   onGoOnline,
   onGoOffline,
+  onSimulateRideOffer,
   onReport,
 }: Props) {
   const [demoScenario, setDemoScenario] = useState<DemoScenario | null>(null);
@@ -211,6 +213,18 @@ export function HomeScreen({
               </Pressable>
             ))}
           </View>
+          {onSimulateRideOffer ? (
+            <Pressable
+              style={styles.simulateRideButton}
+              onPress={() => {
+                setDemoScenario(null);
+                onSimulateRideOffer();
+              }}
+              accessibilityRole="button"
+            >
+              <Text style={styles.simulateRideButtonText}>Simulate Ride Offer (₦4,500)</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -371,6 +385,8 @@ const styles = StyleSheet.create({
   scenarioButtonActive: { backgroundColor: colors.brandDark, borderColor: colors.brandDark },
   scenarioButtonText: { color: colors.text, fontSize: typography.size.xs, fontWeight: '600', textAlign: 'center' },
   scenarioButtonTextActive: { color: '#fff' },
+  simulateRideButton: { minHeight: 38, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.success, borderRadius: 4, paddingHorizontal: spacing.sm },
+  simulateRideButtonText: { color: '#fff', fontSize: typography.size.sm, fontWeight: '600', textAlign: 'center' },
   fund: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.md, marginBottom: spacing.lg, gap: spacing.sm },
   fundTitle: { fontSize: typography.size.md, fontWeight: '600', marginBottom: spacing.xs },
   fundRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },

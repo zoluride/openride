@@ -18,6 +18,8 @@ import {
   submitDriverDocuments,
   useDriverState,
   type DriverDocument,
+  type ActiveTrip,
+  type PendingOffer,
   type RequiredDocumentName,
   type Vehicle,
 } from './src/lib/driver-state';
@@ -118,13 +120,20 @@ function SignedIn({ session }: { session: Session }) {
 }
 
 const DEV_BYPASS_DRIVER_ID = 'dev-bypass-driver';
+const DEV_TRIP_ID = 'dev-preview-trip';
+const DEV_TRIP_FARE_KOBO = 450_000;
 const DEV_BYPASS_VEHICLES: Vehicle[] = [
-  { id: 'dev-preview-vehicle', rego: 'DEV-001', make: 'OpenRide', model: 'Preview', vehicle_type: 'sedan' },
+  { id: 'dev-preview-vehicle', rego: 'DEV-001', make: 'ZOLU', model: 'Preview', vehicle_type: 'sedan' },
 ];
 
 function DevBypassHome({ onExit }: { onExit: () => void }) {
   const [showDocuments, setShowDocuments] = useState(false);
   const [online, setOnline] = useState(false);
+  const [pendingOffer, setPendingOffer] = useState<PendingOffer | null>(null);
+  const [activeTrip, setActiveTrip] = useState<ActiveTrip | null>(null);
+  const [grossEarningsNaira, setGrossEarningsNaira] = useState(0);
+  const [completedTrips, setCompletedTrips] = useState(350);
+  const [completedTripsToday, setCompletedTripsToday] = useState(0);
   const [driverDocuments, setDriverDocuments] = useState<DriverDocument[]>(
     REQUIRED_DRIVER_DOCUMENTS.map(({ type }) => ({ type, status: 'pending', uploaded: false })),
   );
@@ -155,14 +164,56 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
     );
   }
 
+  if (activeTrip) {
+    return (
+      <ActiveTripScreen
+        trip={activeTrip}
+        onEvent={async (event) => {
+          if (event === 'arrived') {
+            setActiveTrip((trip) => (trip ? { ...trip, status: 'arrived_at_pickup' } : trip));
+          } else if (event === 'start') {
+            setActiveTrip((trip) => (trip ? { ...trip, status: 'in_progress' } : trip));
+          } else if (event === 'complete') {
+            setGrossEarningsNaira((gross) => gross + 4_500);
+            setCompletedTrips((trips) => trips + 1);
+            setCompletedTripsToday((trips) => trips + 1);
+            setActiveTrip(null);
+          } else if (event === 'cancel') {
+            setActiveTrip(null);
+          }
+        }}
+      />
+    );
+  }
+
+  if (pendingOffer) {
+    return (
+      <OfferScreen
+        offer={pendingOffer}
+        onAccept={async (tripId) => {
+          setPendingOffer(null);
+          setActiveTrip({
+            id: tripId,
+            status: 'assigned',
+            pickup_address: 'Victoria Island, Lagos',
+            dropoff_address: 'Lekki Phase 1, Lagos',
+            estimated_fare_cents: DEV_TRIP_FARE_KOBO,
+            final_fare_cents: null,
+          });
+        }}
+        onDecline={async () => setPendingOffer(null)}
+      />
+    );
+  }
+
   return (
     <HomeScreen
       driverId={DEV_BYPASS_DRIVER_ID}
       displayName="Dev Preview Driver"
       online={online}
-      grossEarningsNaira={0}
-      completedTrips={350}
-      completedTripsToday={0}
+      grossEarningsNaira={grossEarningsNaira}
+      completedTrips={completedTrips}
+      completedTripsToday={completedTripsToday}
       hoursOnlineToday={0}
       driverDocuments={driverDocuments}
       mockVehicles={DEV_BYPASS_VEHICLES}
@@ -170,6 +221,20 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
       onSignOut={onExit}
       onGoOnline={async () => setOnline(true)}
       onGoOffline={async () => setOnline(false)}
+      onSimulateRideOffer={() => {
+        setPendingOffer({
+          id: 'dev-preview-offer',
+          trip_id: DEV_TRIP_ID,
+          responds_by: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          pickup_eta_s: 720,
+          distance_to_pickup_m: 8_500,
+          trips: {
+            pickup_address: 'Victoria Island, Lagos',
+            dropoff_address: 'Lekki Phase 1, Lagos',
+            estimated_fare_cents: DEV_TRIP_FARE_KOBO,
+          },
+        });
+      }}
       onReport={() => {}}
     />
   );

@@ -39,7 +39,7 @@ export function PhoneAuthScreen({ onDevBypass }: { onDevBypass: () => void }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'right', 'bottom', 'left']}>
-      <Text style={styles.title}>OpenRide Driver</Text>
+      <Text style={styles.title}>ZOLU Driver</Text>
       <Text style={styles.subtitle}>
         {stage === 'phone' ? 'Sign in with your driver phone number' : `Code sent to ${phone}`}
       </Text>
