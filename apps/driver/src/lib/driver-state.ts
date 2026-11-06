@@ -52,7 +52,7 @@ export interface DriverState {
   loading: boolean;
   online: boolean;
   vehicleId: string | null;
-  grossEarnings: number | null;
+  grossEarningsNaira: number | null;
   driverDocuments: DriverDocument[];
   activeTrip: ActiveTrip | null;
   pendingOffer: PendingOffer | null;
@@ -66,7 +66,7 @@ export function useDriverState(session: Session | null): DriverState {
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(false);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
-  const [grossEarnings, setGrossEarnings] = useState<number | null>(null);
+  const [grossEarningsNaira, setGrossEarningsNaira] = useState<number | null>(null);
   const [driverDocuments, setDriverDocuments] = useState<DriverDocument[]>(
     REQUIRED_DRIVER_DOCUMENTS.map(({ type }) => ({ type, status: 'pending', uploaded: false })),
   );
@@ -124,11 +124,11 @@ export function useDriverState(session: Session | null): DriverState {
     setActiveTrip((tripRes.data as ActiveTrip) ?? null);
     setPendingOffer((offerRes.data as unknown as PendingOffer) ?? null);
     if (earningsRes.error) {
-      setGrossEarnings(null);
+      setGrossEarningsNaira(null);
     } else {
       const earningsRows = (earningsRes.data ?? []) as { final_fare_cents: number | null }[];
       const grossEarningsCents = earningsRows.reduce((total, trip) => total + (trip.final_fare_cents ?? 0), 0);
-      setGrossEarnings(grossEarningsCents / 100);
+      setGrossEarningsNaira(grossEarningsCents / 100);
     }
     const documentRows = documentsRes.data ?? [];
     setDriverDocuments(
@@ -190,7 +190,7 @@ export function useDriverState(session: Session | null): DriverState {
     loading,
     online,
     vehicleId,
-    grossEarnings,
+    grossEarningsNaira,
     driverDocuments,
     activeTrip,
     pendingOffer,

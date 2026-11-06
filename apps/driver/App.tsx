@@ -104,7 +104,7 @@ function SignedIn({ session }: { session: Session }) {
       driverId={driverId}
       displayName={displayName}
       online={state.online}
-      grossEarnings={state.grossEarnings}
+      grossEarningsNaira={state.grossEarningsNaira}
       driverDocuments={state.driverDocuments}
       onDocuments={() => setShowDocuments(true)}
       onGoOnline={state.goOnline}
@@ -157,7 +157,7 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
       driverId={DEV_BYPASS_DRIVER_ID}
       displayName="Dev Preview Driver"
       online={online}
-      grossEarnings={0}
+      grossEarningsNaira={0}
       driverDocuments={driverDocuments}
       mockVehicles={DEV_BYPASS_VEHICLES}
       onDocuments={() => setShowDocuments(true)}

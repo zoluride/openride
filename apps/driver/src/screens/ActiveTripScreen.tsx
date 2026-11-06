@@ -1,4 +1,5 @@
-import { colors, formatMoney, spacing, typography } from '@openride/ui';
+import { formatKobo } from '@openride/domain';
+import { colors, spacing, typography } from '@openride/ui';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,7 +41,7 @@ export function ActiveTripScreen({ trip, onEvent }: Props) {
 
   const inProgress = trip.status === 'in_progress';
   const target = inProgress ? trip.dropoff_address : trip.pickup_address;
-  const fareCents = trip.final_fare_cents ?? trip.estimated_fare_cents;
+  const fareKobo = trip.final_fare_cents ?? trip.estimated_fare_cents;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'right', 'bottom', 'left']}>
@@ -51,7 +52,7 @@ export function ActiveTripScreen({ trip, onEvent }: Props) {
         <Text style={styles.value}>{trip.pickup_address}</Text>
         <Text style={[styles.label, { marginTop: spacing.md }]}>Dropoff</Text>
         <Text style={styles.value}>{trip.dropoff_address}</Text>
-        {fareCents != null ? <Text style={styles.fare}>{formatMoney(fareCents)}</Text> : null}
+        {fareKobo != null ? <Text style={styles.fare}>{formatKobo(fareKobo)}</Text> : null}
       </View>
 
       <Pressable style={styles.navButton} onPress={() => navigateTo(target)}>

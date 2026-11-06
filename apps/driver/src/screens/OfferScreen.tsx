@@ -1,4 +1,5 @@
-import { colors, formatDistance, formatDurationS, formatMoney, spacing, typography } from '@openride/ui';
+import { formatKobo } from '@openride/domain';
+import { colors, formatDistance, formatDurationS, spacing, typography } from '@openride/ui';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -60,7 +61,7 @@ export function OfferScreen({ offer, onAccept, onDecline }: Props) {
         <Text style={[styles.label, { marginTop: spacing.md }]}>Dropoff</Text>
         <Text style={styles.value}>{trip?.dropoff_address ?? '—'}</Text>
         {trip?.estimated_fare_cents != null ? (
-          <Text style={styles.fare}>{formatMoney(trip.estimated_fare_cents)}</Text>
+          <Text style={styles.fare}>{formatKobo(trip.estimated_fare_cents)}</Text>
         ) : null}
       </View>
 

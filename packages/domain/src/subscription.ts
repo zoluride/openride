@@ -20,7 +20,3 @@ export function remainingCapForDay(alreadyDeductedKobo: number): number {
 export function isFreeDay(grossKobo: number): boolean {
   return grossKobo < FREE_DAY_THRESHOLD_KOBO;
 }
-
-export function calculateSubscriptionFee(grossEarnings: number): number {
-  return calculateDailyDeduction(grossEarnings * 100) / 100;
-}

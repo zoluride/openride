@@ -1,9 +1,12 @@
 import {
-  calculateSubscriptionFee,
+  calculateDailyDeduction,
   calculateVestingPercentage,
   checkDriverCompliance,
+  formatKobo,
+  isFreeDay,
+  remainingCapForDay,
 } from '@openride/domain';
-import { colors, formatMoney, spacing, typography } from '@openride/ui';
+import { colors, spacing, typography } from '@openride/ui';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,7 +18,7 @@ interface Props {
   driverId: string;
   displayName?: string | null;
   online: boolean;
-  grossEarnings: number | null;
+  grossEarningsNaira: number | null;
   driverDocuments: DriverDocument[];
   onDocuments: () => void;
   mockVehicles?: Vehicle[];
@@ -29,7 +32,7 @@ export function HomeScreen({
   driverId,
   displayName,
   online,
-  grossEarnings,
+  grossEarningsNaira,
   driverDocuments,
   onDocuments,
   mockVehicles,
@@ -38,6 +41,10 @@ export function HomeScreen({
   onGoOffline,
   onReport,
 }: Props) {
+  const grossEarningsKobo = grossEarningsNaira === null ? null : Math.round(grossEarningsNaira * 100);
+  const deductionKobo = grossEarningsKobo === null ? null : calculateDailyDeduction(grossEarningsKobo);
+  const remainingCapKobo = deductionKobo === null ? null : remainingCapForDay(deductionKobo);
+  const freeDay = grossEarningsKobo !== null && isFreeDay(grossEarningsKobo);
   const completedTrips = 350;
   const vestingPercentage = calculateVestingPercentage(completedTrips);
   const sharesEarned = (completedTrips / 750) * 1000;
@@ -102,16 +109,21 @@ export function HomeScreen({
         <View style={styles.earningsRow}>
           <Text style={styles.earningLabel}>Gross earnings today</Text>
           <Text style={styles.earningValue}>
-            {grossEarnings === null ? 'Unavailable' : formatMoney(grossEarnings * 100, 'NGN', 'en-NG')}
+            {grossEarningsKobo === null ? 'Unavailable' : formatKobo(grossEarningsKobo)}
           </Text>
         </View>
         <View style={styles.earningsRow}>
-          <Text style={styles.earningLabel}>Subscription fee today</Text>
-          <Text style={styles.earningValue}>
-            {grossEarnings === null
-              ? 'Unavailable'
-              : formatMoney(calculateSubscriptionFee(grossEarnings) * 100, 'NGN', 'en-NG')}
-          </Text>
+          <Text style={styles.earningLabel}>Today&apos;s ZOLU fee</Text>
+          {grossEarningsKobo === null ? (
+            <Text style={styles.earningValue}>Unavailable</Text>
+          ) : (
+            <View style={styles.feeDetails}>
+              <Text style={freeDay ? styles.freeDayLabel : styles.earningValue}>
+                {freeDay ? 'Free day' : formatKobo(deductionKobo ?? 0)}
+              </Text>
+              <Text style={styles.capRemaining}>{formatKobo(remainingCapKobo ?? 0)} cap remaining</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -120,21 +132,21 @@ export function HomeScreen({
           <View style={styles.comparisonColumn}>
             <Text style={styles.zoluLabel}>ZOLU</Text>
             <Text style={styles.comparisonCaption}>Net</Text>
-            <Text style={styles.zoluFare}>₦2,500</Text>
+            <Text style={styles.zoluFare}>{formatKobo(250_000)}</Text>
           </View>
           <View style={styles.comparisonColumn}>
             <Text style={styles.competitorLabel}>Uber</Text>
             <Text style={styles.comparisonCaption}>Net</Text>
-            <Text style={styles.competitorFare}>₦1,875</Text>
+            <Text style={styles.competitorFare}>{formatKobo(187_500)}</Text>
           </View>
           <View style={styles.comparisonColumn}>
             <Text style={styles.competitorLabel}>Bolt</Text>
             <Text style={styles.comparisonCaption}>Net</Text>
-            <Text style={styles.competitorFare}>₦2,000</Text>
+            <Text style={styles.competitorFare}>{formatKobo(200_000)}</Text>
           </View>
         </View>
       </View>
-      <Text style={styles.comparisonBanner}>You earned ₦625 more with ZOLU.</Text>
+      <Text style={styles.comparisonBanner}>You earned {formatKobo(62_500)} more with ZOLU.</Text>
 
       <View style={styles.vesting}>
         <View style={styles.vestingHeader}>
@@ -225,8 +237,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   earningsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
+  feeDetails: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.xs },
   earningLabel: { color: colors.textMuted, fontSize: typography.size.md, flexShrink: 1 },
   earningValue: { fontSize: typography.size.md, fontWeight: '600' },
+  freeDayLabel: { color: colors.success, fontSize: typography.size.sm, fontWeight: '600' },
+  capRemaining: { color: colors.textMuted, fontSize: typography.size.xs },
   comparisonCard: {
     borderWidth: 1,
     borderColor: colors.border,
