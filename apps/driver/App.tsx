@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import * as Location from 'expo-location';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
@@ -37,6 +38,29 @@ function SignedIn({ session }: { session: Session }) {
   const state = useDriverState(session);
   const [showReport, setShowReport] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
+  const [currentLat, setCurrentLat] = useState<number>();
+  const [currentLng, setCurrentLng] = useState<number>();
+
+  // Get current location for SOS/incident reporting
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        if (active) {
+          setCurrentLat(pos.coords.latitude);
+          setCurrentLng(pos.coords.longitude);
+        }
+      } catch (e) {
+        console.warn('Failed to get current location:', e);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   if (state.loading) {
     return (
@@ -47,7 +71,15 @@ function SignedIn({ session }: { session: Session }) {
   }
 
   if (showReport) {
-    return <ReportIncidentScreen onDone={() => setShowReport(false)} />;
+    return (
+      <ReportIncidentScreen
+        onDone={() => setShowReport(false)}
+        tripId={state.activeTrip?.id}
+        vehicleId={state.vehicleId ?? undefined}
+        locationLat={currentLat}
+        locationLng={currentLng}
+      />
+    );
   }
 
   if (showDocuments) {
