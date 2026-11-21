@@ -64,8 +64,12 @@ pnpm test:dev-hub
 ```
 
 These tests keep all actions in the simulator page's memory and do not call
+<<<<<<< HEAD
 Supabase or modify real Driver app state. CI runs the domain and simulator
 browser tests on pull requests and pushes to `main`.
+=======
+Supabase or modify real Driver app state.
+>>>>>>> 587cb4a (feat: add mock driver simulator and browser regression tests)
 
 ## Payment test mode
 

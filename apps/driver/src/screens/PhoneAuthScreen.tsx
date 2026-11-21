@@ -12,7 +12,7 @@ import {
   RESEND_COOLDOWN_SECONDS,
 } from '../lib/phone-auth';
 
-export function PhoneAuthScreen({ onDevBypass }: { onDevBypass: () => void }) {
+export function PhoneAuthScreen() {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [stage, setStage] = useState<'phone' | 'code'>('phone');
@@ -34,7 +34,7 @@ export function PhoneAuthScreen({ onDevBypass }: { onDevBypass: () => void }) {
     if (busyRef.current) return;
     const e164Phone = normalizeSupportedPhoneNumber(phone);
     if (!e164Phone) {
-      setError('Enter a mobile number in E.164 format, such as +2348012345678 or +61412345678.');
+      setError('Enter your mobile number with its country code, for example 2348012345678.');
       return;
     }
     busyRef.current = true;
@@ -97,11 +97,6 @@ export function PhoneAuthScreen({ onDevBypass }: { onDevBypass: () => void }) {
       <Text style={styles.subtitle}>
         {stage === 'phone' ? 'Sign in with your driver phone number' : `Code sent to ${phone}`}
       </Text>
-      {__DEV__ ? (
-        <Text style={styles.testMode}>
-          Developer test mode: configured local test numbers use a fixed code; no SMS is sent.
-        </Text>
-      ) : null}
       {error ? (
         <Text accessibilityRole="alert" style={styles.error}>
           {error}
@@ -112,23 +107,18 @@ export function PhoneAuthScreen({ onDevBypass }: { onDevBypass: () => void }) {
         <>
           <TextInput
             style={styles.input}
-            placeholder="+2348012345678 or +61412345678"
+            placeholder="2348012345678"
             keyboardType="phone-pad"
             value={phone}
             onChangeText={setPhone}
             editable={!busy}
           />
           {phone.length > 0 && !normalizedPhone ? (
-            <Text style={styles.hint}>Use E.164 format: +234 followed by 10 digits or +61 followed by 9 digits.</Text>
+            <Text style={styles.hint}>Include the country code, for example 2348012345678.</Text>
           ) : null}
           <Pressable style={[styles.button, (busy || !normalizedPhone) && styles.disabled]} onPress={() => void onSendOtp()} disabled={busy || !normalizedPhone}>
             {busy ? <Text style={styles.buttonText}>Sending code…</Text> : <Text style={styles.buttonText}>Send code</Text>}
           </Pressable>
-          {__DEV__ ? (
-            <Pressable style={styles.devButton} onPress={onDevBypass}>
-              <Text style={styles.devButtonText}>Dev Bypass Login</Text>
-            </Pressable>
-          ) : null}
         </>
       ) : (
         <>

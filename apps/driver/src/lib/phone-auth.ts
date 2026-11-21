@@ -5,7 +5,8 @@ export const RESEND_COOLDOWN_SECONDS = 30;
 export type PhoneAuthClient = Pick<SupabaseClient['auth'], 'signInWithOtp' | 'verifyOtp'>;
 
 export function normalizeSupportedPhoneNumber(input: string): string | null {
-  const phone = input.trim().replace(/[\s().-]/g, '');
+  let phone = input.trim().replace(/[\s().-]/g, '');
+  if (/^234\d{10}$/.test(phone)) phone = `+${phone}`;
   if (/^\+234\d{10}$/.test(phone) || /^\+61\d{9}$/.test(phone)) return phone;
   return null;
 }
@@ -47,7 +48,7 @@ export function createPhoneAuthService(client: PhoneAuthClient) {
     async sendOtp(phoneInput: string): Promise<void> {
       const phone = normalizeSupportedPhoneNumber(phoneInput);
       if (!phone) {
-        throw new Error('Enter a mobile number in E.164 format, such as +2348012345678 or +61412345678.');
+        throw new Error('Enter your mobile number with its country code, for example 2348012345678.');
       }
       const { error } = await client.signInWithOtp({ phone, options: { data: { role: 'driver' } } });
       if (error) throw error;

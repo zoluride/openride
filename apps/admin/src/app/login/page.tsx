@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('admin@demo.openride');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,9 +60,6 @@ export default function LoginPage() {
         >
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
-        <p className="text-xs text-gray-500 mt-3">
-          Demo password from seed file. Change before deploying.
-        </p>
       </form>
     </main>
   );

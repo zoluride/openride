@@ -16,25 +16,14 @@ const CATEGORIES = [
 
 const HIGH = new Set(['safety', 'medical', 'abuse']);
 
-export function ReportIncidentScreen({
-  onDone,
-  devPreview = false,
-}: {
-  onDone: () => void;
-  devPreview?: boolean;
-}) {
+export function ReportIncidentScreen({ onDone }: { onDone: () => void }) {
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]['key']>('safety');
   const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
 
   async function submit(): Promise<void> {
     setBusy(true);
     try {
-      if (devPreview) {
-        setSubmitted(true);
-        return;
-      }
       const { data: u } = await supabase.auth.getUser();
       const id = u.user?.id;
       if (!id) throw new Error('Not signed in');
@@ -63,7 +52,7 @@ export function ReportIncidentScreen({
           <Text style={styles.title}>Report an issue</Text>
         </View>
         <Pressable onPress={onDone} hitSlop={8}>
-          <Text style={styles.cancel}>{submitted ? 'Done' : 'Cancel'}</Text>
+          <Text style={styles.cancel}>Cancel</Text>
         </Pressable>
       </View>
 
@@ -73,7 +62,6 @@ export function ReportIncidentScreen({
             key={c.key}
             style={[styles.chip, category === c.key && styles.chipActive]}
             onPress={() => setCategory(c.key)}
-            disabled={submitted}
           >
             <Text style={category === c.key ? styles.chipTextActive : styles.chipText}>{c.label}</Text>
           </Pressable>
@@ -87,20 +75,15 @@ export function ReportIncidentScreen({
         onChangeText={setDescription}
         multiline
         textAlignVertical="top"
-        editable={!submitted}
       />
 
-      {submitted ? (
-        <Text style={styles.success}>Demo incident report saved locally. No network request was made.</Text>
-      ) : null}
-
       <Pressable
-        style={[styles.button, (busy || submitted || description.trim().length < 5) && styles.disabled]}
+        style={[styles.button, (busy || description.trim().length < 5) && styles.disabled]}
         onPress={submit}
-        disabled={busy || submitted || description.trim().length < 5}
+        disabled={busy || description.trim().length < 5}
       >
         <Text style={styles.buttonText}>
-          {busy ? 'Submitting…' : submitted ? 'Saved locally' : 'Submit report'}
+          {busy ? 'Submitting…' : 'Submit report'}
         </Text>
       </Pressable>
     </SafeAreaView>
@@ -122,5 +105,4 @@ const styles = StyleSheet.create({
   button: { backgroundColor: colors.brandDark, padding: spacing.lg, borderRadius: 8, alignItems: 'center', marginTop: spacing.xl },
   disabled: { opacity: 0.5 },
   buttonText: { color: '#fff', fontWeight: '600', fontSize: typography.size.lg },
-  success: { color: colors.online, fontSize: typography.size.sm, fontWeight: '600', marginTop: spacing.md },
 });

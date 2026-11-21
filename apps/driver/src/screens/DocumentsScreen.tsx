@@ -14,11 +14,9 @@ interface Props {
   documents: DriverDocument[];
   onBack: () => void;
   onSubmit: (uploadedTypes: DriverDocumentType[]) => Promise<void>;
-  onPreviewVerify?: () => Promise<void>;
-  preview?: boolean;
 }
 
-export function DocumentsScreen({ documents, onBack, onSubmit, onPreviewVerify, preview = false }: Props) {
+export function DocumentsScreen({ documents, onBack, onSubmit }: Props) {
   const [uploaded, setUploaded] = useState<Set<DriverDocumentType>>(
     () => new Set(documents.filter((document) => document.uploaded && document.status !== 'verified').map((document) => document.type)),
   );
@@ -36,21 +34,7 @@ export function DocumentsScreen({ documents, onBack, onSubmit, onPreviewVerify, 
     setMessage(null);
     try {
       await onSubmit([...uploaded]);
-      setMessage(preview ? 'Renewal submitted and saved in this preview.' : 'Documents submitted for review.');
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function simulatePreviewVerification(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      await onPreviewVerify?.();
-      setMessage('Preview verification simulated locally. No review record was changed.');
+      setMessage('Documents submitted for review.');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -68,7 +52,7 @@ export function DocumentsScreen({ documents, onBack, onSubmit, onPreviewVerify, 
         <Text style={styles.title}>Driver documents</Text>
       </View>
       <Text style={styles.muted}>
-        {preview ? 'Lagos driver compliance records' : 'Submit your documents for admin review.'}
+        Submit your documents for admin review.
       </Text>
 
       <View style={styles.list}>
@@ -127,16 +111,6 @@ export function DocumentsScreen({ documents, onBack, onSubmit, onPreviewVerify, 
             {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit for Review</Text>}
           </Pressable>
         ) : null}
-        {__DEV__ && preview && onPreviewVerify ? (
-          <Pressable
-            accessibilityRole="button"
-            style={[styles.verifyButton, busy && styles.disabled]}
-            disabled={busy}
-            onPress={() => void simulatePreviewVerification()}
-          >
-            <Text style={styles.submitText}>Simulate Verification (Preview Only)</Text>
-          </Pressable>
-        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -170,6 +144,5 @@ const styles = StyleSheet.create({
   success: { color: colors.online, fontSize: typography.size.sm, fontWeight: '600', marginTop: spacing.md },
   actions: { marginTop: 'auto' },
   submitButton: { backgroundColor: colors.brandDark, borderRadius: 8, padding: spacing.lg, alignItems: 'center' },
-  verifyButton: { backgroundColor: colors.online, borderRadius: 8, padding: spacing.md, alignItems: 'center', marginTop: spacing.sm },
   submitText: { color: '#fff', fontSize: typography.size.md, fontWeight: '600' },
 });

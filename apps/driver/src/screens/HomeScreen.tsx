@@ -19,42 +19,6 @@ import { ZoluLogo } from '../components/ZoluLogo';
 import { signOut } from '../lib/auth';
 import { fetchMyVehicles, type DriverDocument, type Vehicle } from '../lib/driver-state';
 
-interface DemoScenario {
-  id: string;
-  label: string;
-  grossEarningsNaira: number;
-  tripsToday: number;
-  hoursOnlineToday: number;
-  lifetimeTrips: number;
-}
-
-const DEMO_SCENARIOS: DemoScenario[] = [
-  {
-    id: 'free-day',
-    label: 'Free Day',
-    grossEarningsNaira: 3_200,
-    tripsToday: 2,
-    hoursOnlineToday: 3.5,
-    lifetimeTrips: 120,
-  },
-  {
-    id: 'top-up-eligible',
-    label: 'Top-Up Eligible',
-    grossEarningsNaira: 14_000,
-    tripsToday: 9,
-    hoursOnlineToday: 10.5,
-    lifetimeTrips: 350,
-  },
-  {
-    id: 'max-cap-and-vested',
-    label: 'Max Cap & Vested',
-    grossEarningsNaira: 35_000,
-    tripsToday: 14,
-    hoursOnlineToday: 10,
-    lifetimeTrips: 750,
-  },
-];
-
 interface Props {
   driverId: string;
   displayName?: string | null;
@@ -64,13 +28,10 @@ interface Props {
   completedTripsToday: number | null;
   hoursOnlineToday: number | null;
   driverDocuments: DriverDocument[];
-  devPreview?: boolean;
   onDocuments: () => void;
-  mockVehicles?: Vehicle[];
   onSignOut?: () => void;
   onGoOnline: (vehicleId: string) => Promise<void>;
   onGoOffline: () => Promise<void>;
-  onSimulateRideOffer?: () => void;
   onReport: () => void;
 }
 
@@ -83,20 +44,16 @@ export function HomeScreen({
   completedTripsToday,
   hoursOnlineToday,
   driverDocuments,
-  devPreview = false,
   onDocuments,
-  mockVehicles,
   onSignOut,
   onGoOnline,
   onGoOffline,
-  onSimulateRideOffer,
   onReport,
 }: Props) {
-  const [demoScenario, setDemoScenario] = useState<DemoScenario | null>(null);
-  const currentGrossEarningsNaira = demoScenario?.grossEarningsNaira ?? grossEarningsNaira;
-  const currentTripsToday = demoScenario?.tripsToday ?? completedTripsToday;
-  const currentHoursOnlineToday = demoScenario?.hoursOnlineToday ?? hoursOnlineToday;
-  const currentLifetimeTrips = demoScenario?.lifetimeTrips ?? completedTrips;
+  const currentGrossEarningsNaira = grossEarningsNaira;
+  const currentTripsToday = completedTripsToday;
+  const currentHoursOnlineToday = hoursOnlineToday;
+  const currentLifetimeTrips = completedTrips;
   const grossEarningsKobo =
     currentGrossEarningsNaira === null ? null : Math.round(currentGrossEarningsNaira * 100);
   const deductionKobo = grossEarningsKobo === null ? null : calculateDailyDeduction(grossEarningsKobo);
@@ -110,13 +67,12 @@ export function HomeScreen({
       ? null
       : calculateTopUp(grossEarningsKobo, currentHoursOnlineToday, currentTripsToday);
   const compliance = checkDriverCompliance(driverDocuments);
-  const canGoOnline = devPreview || compliance.compliant;
-  const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles ?? []);
-  const [selected, setSelected] = useState<string | null>(mockVehicles?.[0]?.id ?? null);
+  const canGoOnline = compliance.compliant;
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (mockVehicles) return;
     let active = true;
     void fetchMyVehicles(driverId).then((vs) => {
       if (!active) return;
@@ -126,7 +82,7 @@ export function HomeScreen({
     return () => {
       active = false;
     };
-  }, [driverId, mockVehicles]);
+  }, [driverId]);
 
   async function toggle(): Promise<void> {
     setBusy(true);
@@ -202,49 +158,6 @@ export function HomeScreen({
           )}
         </View>
       </View>
-
-      {__DEV__ ? (
-        <View style={styles.scenarioCard}>
-          <View style={styles.scenarioHeader}>
-            <Text style={styles.scenarioTitle}>Dev Demo Scenarios</Text>
-            <Pressable onPress={() => setDemoScenario(null)} hitSlop={8} accessibilityRole="button">
-              <Text style={styles.liveDataButton}>Live Data</Text>
-            </Pressable>
-          </View>
-          <View style={styles.scenarioButtons}>
-            {DEMO_SCENARIOS.map((scenario) => (
-              <Pressable
-                key={scenario.id}
-                style={[styles.scenarioButton, demoScenario?.id === scenario.id && styles.scenarioButtonActive]}
-                onPress={() => setDemoScenario(scenario)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: demoScenario?.id === scenario.id }}
-              >
-                <Text
-                  style={[
-                    styles.scenarioButtonText,
-                    demoScenario?.id === scenario.id && styles.scenarioButtonTextActive,
-                  ]}
-                >
-                  {scenario.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          {onSimulateRideOffer ? (
-            <Pressable
-              style={styles.simulateRideButton}
-              onPress={() => {
-                setDemoScenario(null);
-                onSimulateRideOffer();
-              }}
-              accessibilityRole="button"
-            >
-              <Text style={styles.simulateRideButtonText}>Simulate Ride Offer (₦4,500)</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
 
       <View style={styles.fund}>
         <Text style={styles.fundTitle}>Stabilisation Fund</Text>
@@ -367,7 +280,7 @@ export function HomeScreen({
             <Text style={styles.buttonText}>{online ? 'Go offline' : 'Go online'}</Text>
           )}
         </Pressable>
-        {!devPreview && !compliance.compliant ? <Text style={styles.warning}>Verification Required</Text> : null}
+        {!compliance.compliant ? <Text style={styles.warning}>Verification Required</Text> : null}
       </View>
     </SafeAreaView>
   );
@@ -396,17 +309,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   earningsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
-  scenarioCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.md, marginBottom: spacing.md, gap: spacing.sm },
-  scenarioHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  scenarioTitle: { fontSize: typography.size.sm, fontWeight: '600' },
-  liveDataButton: { color: colors.brandDark, fontSize: typography.size.xs, fontWeight: '600' },
-  scenarioButtons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.xs },
-  scenarioButton: { width: '48%', minHeight: 34, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 4, paddingHorizontal: spacing.xs },
-  scenarioButtonActive: { backgroundColor: colors.brandDark, borderColor: colors.brandDark },
-  scenarioButtonText: { color: colors.text, fontSize: typography.size.xs, fontWeight: '600', textAlign: 'center' },
-  scenarioButtonTextActive: { color: '#fff' },
-  simulateRideButton: { minHeight: 38, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.success, borderRadius: 4, paddingHorizontal: spacing.sm },
-  simulateRideButtonText: { color: '#fff', fontSize: typography.size.sm, fontWeight: '600', textAlign: 'center' },
   fund: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.md, marginBottom: spacing.lg, gap: spacing.sm },
   fundTitle: { fontSize: typography.size.md, fontWeight: '600', marginBottom: spacing.xs },
   fundRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
