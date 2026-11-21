@@ -13,14 +13,11 @@ import { ReportIncidentScreen } from './src/screens/ReportIncidentScreen';
 import { api } from './src/lib/api';
 import { useSession } from './src/lib/auth';
 import {
-  REQUIRED_DRIVER_DOCUMENTS,
   submitDriverDocuments,
   useDriverState,
   type DriverDocument,
-  type DriverDocumentType,
   type ActiveTrip,
   type PendingOffer,
-  type RequiredDocumentName,
   type Vehicle,
 } from './src/lib/driver-state';
 import { simulatePreviewDocumentVerification } from './src/lib/preview-documents';
@@ -59,12 +56,8 @@ function SignedIn({ session }: { session: Session }) {
         driverId={driverId}
         documents={state.driverDocuments}
         onBack={() => setShowDocuments(false)}
-        onSubmit={async (uploadedTypes) => {
-          const requiredTypes = uploadedTypes.filter(
-            (type): type is RequiredDocumentName =>
-              REQUIRED_DRIVER_DOCUMENTS.some((document) => document.type === type),
-          );
-          await submitDriverDocuments(driverId, requiredTypes);
+        onSubmit={async (documents) => {
+          await submitDriverDocuments(driverId, documents);
           await state.refresh();
           setShowDocuments(false);
         }}
@@ -149,6 +142,7 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
   const [driverDocuments, setDriverDocuments] = useState<DriverDocument[]>(() => [
     {
       type: 'License',
+      docType: 'license',
       label: "Nigerian Driver's Licence",
       status: 'verified',
       uploaded: true,
@@ -157,6 +151,7 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
     },
     {
       type: 'LASDRI',
+      docType: 'lasdri',
       label: 'LASDRI Driver Institute Card',
       status: 'verified',
       uploaded: true,
@@ -165,6 +160,7 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
     },
     {
       type: 'Hackney Permit',
+      docType: 'hackney_permit',
       label: 'Lagos Hackney Permit / Vehicle License',
       status: 'verified',
       uploaded: true,
@@ -174,6 +170,7 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
     },
     {
       type: 'Motor Insurance',
+      docType: 'motor_insurance',
       label: 'Comprehensive / Third-Party Motor Insurance',
       status: 'verified',
       uploaded: true,
@@ -189,10 +186,10 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
         documents={driverDocuments}
         preview
         onBack={() => setShowDocuments(false)}
-        onSubmit={async (uploadedTypes: DriverDocumentType[]) => {
-          setDriverDocuments((documents) =>
-            documents.map((document) =>
-              uploadedTypes.includes(document.type)
+        onSubmit={async (documents: DriverDocument[]) => {
+          setDriverDocuments((current) =>
+            current.map((document) =>
+              documents.some((d) => d.docType === document.docType)
                 ? { ...document, status: 'pending', uploaded: true, renewalSubmitted: true }
                 : document,
             ),

@@ -113,7 +113,12 @@ export function HomeScreen({
     grossEarningsKobo === null || currentTripsToday === null || currentHoursOnlineToday === null
       ? null
       : calculateTopUp(grossEarningsKobo, currentHoursOnlineToday, currentTripsToday);
-  const compliance = checkDriverCompliance(driverDocuments);
+  // Map to simplified format for compliance check (expects 'verified' or 'pending' status only)
+  const complianceDocuments: { type: string; status: 'verified' | 'pending' }[] = driverDocuments.map((doc) => ({
+    type: doc.type,
+    status: doc.status === 'verified' ? ('verified' as const) : ('pending' as const),
+  }));
+  const compliance = checkDriverCompliance(complianceDocuments);
   const canGoOnline = devPreview || compliance.compliant;
   const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles ?? []);
   const [selected, setSelected] = useState<string | null>(mockVehicles?.[0]?.id ?? null);

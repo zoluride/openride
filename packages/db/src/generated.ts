@@ -2099,10 +2099,6 @@ export type Database = {
         Args: { p_driver_id: string }
         Returns: boolean
       }
-      vehicle_documents_compliant: {
-        Args: { p_vehicle_id: string }
-        Returns: boolean
-      }
       dropgeometrycolumn:
         | {
             Args: {
@@ -2279,6 +2275,14 @@ export type Database = {
       }
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
+      review_driver_document: {
+        Args: {
+          p_document_id: string
+          p_review_notes?: string
+          p_status: Database["public"]["Enums"]["document_status"]
+        }
+        Returns: string
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       st_3dclosestpoint: {
@@ -2862,6 +2866,19 @@ export type Database = {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
       }
+      subject_documents_compliant: {
+        Args: { p_applies_to: string; p_subject_id: string }
+        Returns: boolean
+      }
+      submit_driver_document: {
+        Args: {
+          p_doc_type: Database["public"]["Enums"]["driver_doc_type"]
+          p_expires_on?: string
+          p_issued_on?: string
+          p_storage_path: string
+        }
+        Returns: string
+      }
       unlockrows: { Args: { "": string }; Returns: number }
       updategeometrysrid: {
         Args: {
@@ -2873,6 +2890,10 @@ export type Database = {
         }
         Returns: string
       }
+      vehicle_documents_compliant: {
+        Args: { p_vehicle_id: string }
+        Returns: boolean
+      }
       write_audit_log: {
         Args: {
           p_action: string
@@ -2882,23 +2903,6 @@ export type Database = {
           p_target_table: string
         }
         Returns: undefined
-      }
-      review_driver_document: {
-        Args: {
-          p_document_id: string
-          p_review_notes?: string | null
-          p_status: Database['public']['Enums']['document_status']
-        }
-        Returns: string
-      }
-      submit_driver_document: {
-        Args: {
-          p_doc_type: Database['public']['Enums']['driver_doc_type']
-          p_expires_on?: string | null
-          p_issued_on?: string | null
-          p_storage_path: string
-        }
-        Returns: string
       }
     }
     Enums: {
@@ -2914,13 +2918,15 @@ export type Database = {
       driver_doc_type:
         | "licence_front"
         | "licence_back"
-        | "license"
-        | "lasdri"
-        | "nhia"
         | "authority"
         | "photo"
         | "medical_cert"
         | "other"
+        | "license"
+        | "lasdri"
+        | "nhia"
+        | "hackney_permit"
+        | "motor_insurance"
       driver_status_kind: "offline" | "online" | "on_trip" | "break"
       fuel_type: "petrol" | "diesel" | "hybrid" | "bev" | "phev"
       incident_category:
@@ -3679,13 +3685,15 @@ export const Constants = {
       driver_doc_type: [
         "licence_front",
         "licence_back",
-        "license",
-        "lasdri",
-        "nhia",
         "authority",
         "photo",
         "medical_cert",
         "other",
+        "license",
+        "lasdri",
+        "nhia",
+        "hackney_permit",
+        "motor_insurance",
       ],
       driver_status_kind: ["offline", "online", "on_trip", "break"],
       fuel_type: ["petrol", "diesel", "hybrid", "bev", "phev"],
