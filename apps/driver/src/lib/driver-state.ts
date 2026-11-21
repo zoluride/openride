@@ -1,8 +1,10 @@
 import { channels } from '@openride/realtime';
+import type { Database } from '@openride/db';
 import type { Session } from '@supabase/supabase-js';
 import { useCallback, useEffect, useState } from 'react';
 
 import { api } from './api';
+import type { DocumentFile } from './file-upload';
 import { LocationError, startLocationStreaming, stopLocationStreaming } from './location';
 import { supabase } from './supabase';
 
@@ -21,17 +23,21 @@ export const REQUIRED_DRIVER_DOCUMENTS = [
 ] as const;
 
 export type RequiredDocumentName = (typeof REQUIRED_DRIVER_DOCUMENTS)[number]['type'];
-export type DriverDocumentType = RequiredDocumentName | 'Hackney Permit' | 'Motor Insurance';
+export type DriverDocumentType = RequiredDocumentName | 'Hackney Permit' | 'Motor Insurance' | string;
 
 export interface DriverDocument {
+  id?: string;
   type: DriverDocumentType;
+  docType: Database['public']['Enums']['driver_doc_type'];
   label?: string;
-  status: 'verified' | 'pending';
+  status: 'verified' | 'pending' | 'approved' | 'rejected' | 'expired';
   uploaded: boolean;
+  issuedOn?: string | null;
   expiresOn?: string | null;
   expiryLabel?: string;
   expiringSoon?: boolean;
   renewalSubmitted?: boolean;
+  storageFile?: DocumentFile;
 }
 
 export interface ActiveTrip {
@@ -88,7 +94,7 @@ export function useDriverState(session: Session | null): DriverState {
   const [completedTripsToday, setCompletedTripsToday] = useState<number | null>(null);
   const [hoursOnlineToday, setHoursOnlineToday] = useState<number | null>(null);
   const [driverDocuments, setDriverDocuments] = useState<DriverDocument[]>(
-    REQUIRED_DRIVER_DOCUMENTS.map(({ type }) => ({ type, status: 'pending', uploaded: false })),
+    REQUIRED_DRIVER_DOCUMENTS.map(({ type, docType }) => ({ type, docType, status: 'pending', uploaded: false })),
   );
   const [activeTrip, setActiveTrip] = useState<ActiveTrip | null>(null);
   const [pendingOffer, setPendingOffer] = useState<PendingOffer | null>(null);
@@ -145,9 +151,8 @@ export function useDriverState(session: Session | null): DriverState {
           .or(`ended_at.is.null,ended_at.gt.${dayStart.toISOString()}`),
         supabase
           .from('driver_documents')
-          .select('doc_type, status')
-          .eq('driver_id', driverId)
-          .in('doc_type', REQUIRED_DRIVER_DOCUMENTS.map(({ docType }) => docType)),
+          .select('id, doc_type, status, issued_on, expires_on')
+          .eq('driver_id', driverId),
       ]);
 
       const status = statusRes.data as { status?: string; vehicle_id?: string } | null;
@@ -178,16 +183,54 @@ export function useDriverState(session: Session | null): DriverState {
         setHoursOnlineToday(onlineMilliseconds / 3_600_000);
       }
       const documentRows = documentsRes.data ?? [];
-      setDriverDocuments(
-        REQUIRED_DRIVER_DOCUMENTS.map(({ type, docType }) => {
-          const matchingDocuments = documentRows.filter((document) => document.doc_type === docType);
-          return {
-            type,
-            status: matchingDocuments.some((document) => document.status === 'approved') ? 'verified' : 'pending',
-            uploaded: matchingDocuments.length > 0,
-          };
-        }),
-      );
+      // Build a map of doc_type to their latest documents
+      const docMap = new Map<
+        string,
+        Array<{ id: string; status: string; issued_on: string | null; expires_on: string | null }>
+      >();
+      for (const doc of documentRows) {
+        if (!docMap.has(doc.doc_type)) {
+          docMap.set(doc.doc_type, []);
+        }
+        docMap.get(doc.doc_type)?.push(doc);
+      }
+
+      // Map required documents with status and expiry info
+      const mappedDocs: DriverDocument[] = REQUIRED_DRIVER_DOCUMENTS.map(({ type, docType }) => {
+        const docs = docMap.get(docType) || [];
+        const approvedDoc = docs.find((d) => d.status === 'approved');
+        const pendingDoc = docs.length > 0 ? docs[0] : null;
+        const latestDoc = approvedDoc || pendingDoc;
+
+        const status = approvedDoc
+          ? latestDoc?.expires_on && new Date(latestDoc.expires_on) < new Date()
+            ? 'expired'
+            : 'verified'
+          : pendingDoc
+            ? pendingDoc.status === 'pending'
+              ? 'pending'
+              : (pendingDoc.status as 'rejected' | 'approved' | 'expired')
+            : 'pending';
+
+        const finalStatus: 'verified' | 'pending' | 'approved' | 'rejected' | 'expired' = status as 
+          | 'verified'
+          | 'pending'
+          | 'approved'
+          | 'rejected'
+          | 'expired';
+        return {
+          type,
+          docType,
+          status: finalStatus,
+          uploaded: docs.length > 0,
+          issuedOn: latestDoc?.issued_on,
+          expiresOn: latestDoc?.expires_on,
+          expiryLabel: formatExpiryLabel(latestDoc?.expires_on ?? null),
+          expiringSoon: isExpiringsoon(latestDoc?.expires_on ?? null),
+        };
+      });
+
+      setDriverDocuments(mappedDocs);
       setError(null);
       setLoading(false);
     } catch (err) {
@@ -288,18 +331,140 @@ export function useDriverState(session: Session | null): DriverState {
   };
 }
 
-export async function submitDriverDocuments(driverId: string, uploadedTypes: RequiredDocumentName[]): Promise<void> {
-  const documents = REQUIRED_DRIVER_DOCUMENTS.filter(({ type }) => uploadedTypes.includes(type));
+export async function submitDriverDocuments(
+  driverId: string,
+  documents: DriverDocument[],
+  options?: { useMockPath?: boolean },
+): Promise<void> {
+  const isMockMode = options?.useMockPath ?? __DEV__;
 
-  for (const { docType } of documents) {
+  for (const doc of documents) {
+    // If in dev/preview mode without actual file, use mock path
+    let storagePath = isMockMode && !doc.storageFile ? `mock/${driverId}/${doc.docType}/${Date.now()}` : null;
+
+    // If we have a real file, upload it first
+    if (doc.storageFile && !storagePath) {
+      try {
+        const { uploadFileToStorage } = await import('./file-upload');
+        storagePath = await uploadFileToStorage(supabase, 'driver_documents', doc.storageFile, driverId, doc.docType);
+      } catch (error) {
+        throw new Error(
+          `Failed to upload ${doc.type}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
+    }
+
+    if (!storagePath) {
+      throw new Error(`No storage path for ${doc.type}`);
+    }
+
     const { error } = await supabase.rpc('submit_driver_document', {
-      p_doc_type: docType,
-      p_storage_path: `mock/${driverId}/${docType}/${Date.now()}`,
-      p_issued_on: null,
-      p_expires_on: null,
+      p_doc_type: doc.docType,
+      p_storage_path: storagePath,
+      p_issued_on: doc.issuedOn
+        ? new Date(doc.issuedOn).toISOString().split('T')[0]
+        : undefined,
+      p_expires_on: doc.expiresOn
+        ? new Date(doc.expiresOn).toISOString().split('T')[0]
+        : undefined,
     });
     if (error) throw error;
   }
+}
+
+/**
+ * Fetch the driver's required document types based on jurisdiction/compliance rules
+ */
+export async function fetchRequiredDocumentTypes(driverId: string): Promise<DriverDocument[]> {
+  const { data: profile } = await supabase
+    .from('driver_profiles')
+    .select('operator_id')
+    .eq('user_id', driverId)
+    .single();
+
+  if (!profile?.operator_id) {
+    throw new Error('Driver profile not found');
+  }
+
+  const { data: operator } = await supabase
+    .from('operators')
+    .select('country, state')
+    .eq('id', profile.operator_id)
+    .single();
+
+  if (!operator?.country) {
+    throw new Error('Operator not found');
+  }
+
+  // Fetch required document types from compliance rules
+  const stateFilter = operator.state ? `state.is.null,state.eq.${operator.state}` : 'state.is.null';
+  const { data: rules } = await supabase
+    .from('compliance_rules')
+    .select('doc_type')
+    .eq('operator_id', profile.operator_id)
+    .eq('country', operator.country)
+    .eq('applies_to', 'driver')
+    .eq('is_required', true)
+    .or(stateFilter);
+
+  if (!rules) {
+    return REQUIRED_DRIVER_DOCUMENTS.map(({ type, docType }) => ({
+      type,
+      docType,
+      status: 'pending',
+      uploaded: false,
+    }));
+  }
+
+  // Map doc_type strings to DriverDocument entries
+  return rules.map((rule: { doc_type: string }) => {
+    const matchedRequired = REQUIRED_DRIVER_DOCUMENTS.find((r) => r.docType === rule.doc_type);
+    return {
+      type: (matchedRequired?.type ?? rule.doc_type) as string,
+      docType: rule.doc_type as Database['public']['Enums']['driver_doc_type'],
+      status: 'pending' as const,
+      uploaded: false,
+    };
+  });
+}
+
+/**
+ * Calculate if a document is expiring soon (within 30 days)
+ */
+function isExpiringsoon(expiresOn: string | null): boolean {
+  if (!expiresOn) return false;
+  const expiryDate = new Date(expiresOn);
+  const thirtyDaysFromNow = new Date();
+  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+  return expiryDate <= thirtyDaysFromNow && expiryDate >= new Date();
+}
+
+/**
+ * Format expiry date to readable label
+ */
+function formatExpiryLabel(expiresOn: string | null): string | undefined {
+  if (!expiresOn) return undefined;
+  const expiryDate = new Date(expiresOn);
+  const now = new Date();
+  const daysRemaining = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (daysRemaining < 0) {
+    return 'expired';
+  }
+  if (daysRemaining === 0) {
+    return 'expires today';
+  }
+  if (daysRemaining === 1) {
+    return 'expires tomorrow';
+  }
+  if (daysRemaining <= 30) {
+    return `expires in ${daysRemaining} days`;
+  }
+  if (daysRemaining <= 365) {
+    const months = Math.ceil(daysRemaining / 30);
+    return `expires in ${months} month${months > 1 ? 's' : ''}`;
+  }
+  return `expires in ${Math.ceil(daysRemaining / 365)} year${Math.ceil(daysRemaining / 365) > 1 ? 's' : ''}`;
 }
 
 /** Vehicles this driver can operate (their default vehicle(s)). */

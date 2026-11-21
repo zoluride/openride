@@ -6,13 +6,19 @@ describe('simulatePreviewDocumentVerification', () => {
   it('updates preview state locally without mutating unrelated records', () => {
     const input = [
       {
-        type: 'Hackney Permit' as const,
+        type: 'Hackney Permit',
+        docType: 'hackney_permit' as const,
         status: 'pending' as const,
         uploaded: true,
         renewalSubmitted: true,
         expiringSoon: true,
       },
-      { type: 'License' as const, status: 'verified' as const, uploaded: true },
+      {
+        type: 'License',
+        docType: 'license' as const,
+        status: 'verified' as const,
+        uploaded: true,
+      },
     ];
 
     const result = simulatePreviewDocumentVerification(input, '2027-11-06T00:00:00.000Z');
