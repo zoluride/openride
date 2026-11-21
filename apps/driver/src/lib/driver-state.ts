@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { useCallback, useEffect, useState } from 'react';
 
 import { api } from './api';
-import { startLocationStreaming, stopLocationStreaming } from './location';
+import { LocationError, startLocationStreaming, stopLocationStreaming } from './location';
 import { supabase } from './supabase';
 
 export interface Vehicle {
@@ -54,6 +54,12 @@ export interface PendingOffer {
 
 const ACTIVE_STATUSES = ['assigned', 'driver_en_route', 'arrived_at_pickup', 'in_progress'] as const;
 
+export interface DriverError {
+  code: 'location_permission_denied' | 'location_push_failed' | 'state_refresh_failed' | 'api_error';
+  message: string;
+  timestamp: number;
+}
+
 export interface DriverState {
   loading: boolean;
   online: boolean;
@@ -65,9 +71,11 @@ export interface DriverState {
   driverDocuments: DriverDocument[];
   activeTrip: ActiveTrip | null;
   pendingOffer: PendingOffer | null;
+  error: DriverError | null;
   refresh: () => Promise<void>;
   goOnline: (vehicleId: string) => Promise<void>;
   goOffline: () => Promise<void>;
+  clearError: () => void;
 }
 
 export function useDriverState(session: Session | null): DriverState {
@@ -84,101 +92,112 @@ export function useDriverState(session: Session | null): DriverState {
   );
   const [activeTrip, setActiveTrip] = useState<ActiveTrip | null>(null);
   const [pendingOffer, setPendingOffer] = useState<PendingOffer | null>(null);
+  const [error, setError] = useState<DriverError | null>(null);
 
   const refresh = useCallback(async () => {
     if (!driverId) return;
-    const nowIso = new Date().toISOString();
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
-    const [statusRes, tripRes, offerRes, earningsRes, completedTripsRes, shiftsRes, documentsRes] = await Promise.all([
-      supabase
-        .from('driver_status')
-        .select('status, vehicle_id')
-        .eq('driver_id', driverId)
-        .is('ended_at', null)
-        .maybeSingle(),
-      supabase
-        .from('trips')
-        .select('id, status, pickup_address, dropoff_address, estimated_fare_cents, final_fare_cents')
-        .eq('driver_id', driverId)
-        .in('status', ACTIVE_STATUSES)
-        .order('assigned_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from('trip_offers')
-        .select('id, trip_id, responds_by, pickup_eta_s, distance_to_pickup_m, trips(pickup_address, dropoff_address, estimated_fare_cents)')
-        .eq('driver_id', driverId)
-        .eq('status', 'pending')
-        .gt('responds_by', nowIso)
-        .order('sent_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from('trips')
-        .select('final_fare_cents')
-        .eq('driver_id', driverId)
-        .eq('status', 'completed')
-        .gte('completed_at', dayStart.toISOString())
-        .lt('completed_at', dayEnd.toISOString()),
-      supabase
-        .from('trips')
-        .select('id', { count: 'exact', head: true })
-        .eq('driver_id', driverId)
-        .eq('status', 'completed'),
-      supabase
-        .from('driver_status')
-        .select('started_at, ended_at')
-        .lte('started_at', nowIso)
-        .or(`ended_at.is.null,ended_at.gt.${dayStart.toISOString()}`),
-      supabase
-        .from('driver_documents')
-        .select('doc_type, status')
-        .eq('driver_id', driverId)
-        .in('doc_type', REQUIRED_DRIVER_DOCUMENTS.map(({ docType }) => docType)),
-    ]);
+    try {
+      const nowIso = new Date().toISOString();
+      const dayStart = new Date();
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+      const [statusRes, tripRes, offerRes, earningsRes, completedTripsRes, shiftsRes, documentsRes] = await Promise.all([
+        supabase
+          .from('driver_status')
+          .select('status, vehicle_id')
+          .eq('driver_id', driverId)
+          .is('ended_at', null)
+          .maybeSingle(),
+        supabase
+          .from('trips')
+          .select('id, status, pickup_address, dropoff_address, estimated_fare_cents, final_fare_cents')
+          .eq('driver_id', driverId)
+          .in('status', ACTIVE_STATUSES)
+          .order('assigned_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('trip_offers')
+          .select('id, trip_id, responds_by, pickup_eta_s, distance_to_pickup_m, trips(pickup_address, dropoff_address, estimated_fare_cents)')
+          .eq('driver_id', driverId)
+          .eq('status', 'pending')
+          .gt('responds_by', nowIso)
+          .order('sent_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('trips')
+          .select('final_fare_cents')
+          .eq('driver_id', driverId)
+          .eq('status', 'completed')
+          .gte('completed_at', dayStart.toISOString())
+          .lt('completed_at', dayEnd.toISOString()),
+        supabase
+          .from('trips')
+          .select('id', { count: 'exact', head: true })
+          .eq('driver_id', driverId)
+          .eq('status', 'completed'),
+        supabase
+          .from('driver_status')
+          .select('started_at, ended_at')
+          .lte('started_at', nowIso)
+          .or(`ended_at.is.null,ended_at.gt.${dayStart.toISOString()}`),
+        supabase
+          .from('driver_documents')
+          .select('doc_type, status')
+          .eq('driver_id', driverId)
+          .in('doc_type', REQUIRED_DRIVER_DOCUMENTS.map(({ docType }) => docType)),
+      ]);
 
-    const status = statusRes.data as { status?: string; vehicle_id?: string } | null;
-    setOnline(Boolean(status) && status?.status !== 'offline');
-    setVehicleId(status?.vehicle_id ?? null);
-    setActiveTrip((tripRes.data as ActiveTrip) ?? null);
-    setPendingOffer((offerRes.data as unknown as PendingOffer) ?? null);
-    if (earningsRes.error) {
-      setGrossEarningsNaira(null);
-      setCompletedTripsToday(null);
-    } else {
-      const earningsRows = (earningsRes.data ?? []) as { final_fare_cents: number | null }[];
-      const grossEarningsCents = earningsRows.reduce((total, trip) => total + (trip.final_fare_cents ?? 0), 0);
-      setGrossEarningsNaira(grossEarningsCents / 100);
-      setCompletedTripsToday(earningsRows.length);
+      const status = statusRes.data as { status?: string; vehicle_id?: string } | null;
+      setOnline(Boolean(status) && status?.status !== 'offline');
+      setVehicleId(status?.vehicle_id ?? null);
+      setActiveTrip((tripRes.data as ActiveTrip) ?? null);
+      setPendingOffer((offerRes.data as unknown as PendingOffer) ?? null);
+      if (earningsRes.error) {
+        setGrossEarningsNaira(null);
+        setCompletedTripsToday(null);
+      } else {
+        const earningsRows = (earningsRes.data ?? []) as { final_fare_cents: number | null }[];
+        const grossEarningsCents = earningsRows.reduce((total, trip) => total + (trip.final_fare_cents ?? 0), 0);
+        setGrossEarningsNaira(grossEarningsCents / 100);
+        setCompletedTripsToday(earningsRows.length);
+      }
+      setCompletedTrips(completedTripsRes.error ? null : completedTripsRes.count ?? 0);
+      if (shiftsRes.error) {
+        setHoursOnlineToday(null);
+      } else {
+        const currentTimeMs = Date.now();
+        const dayStartMs = dayStart.getTime();
+        const onlineMilliseconds = (shiftsRes.data ?? []).reduce((total, shift) => {
+          const startedAtMs = Math.max(new Date(shift.started_at).getTime(), dayStartMs);
+          const endedAtMs = Math.min(shift.ended_at ? new Date(shift.ended_at).getTime() : currentTimeMs, currentTimeMs);
+          return total + Math.max(0, endedAtMs - startedAtMs);
+        }, 0);
+        setHoursOnlineToday(onlineMilliseconds / 3_600_000);
+      }
+      const documentRows = documentsRes.data ?? [];
+      setDriverDocuments(
+        REQUIRED_DRIVER_DOCUMENTS.map(({ type, docType }) => {
+          const matchingDocuments = documentRows.filter((document) => document.doc_type === docType);
+          return {
+            type,
+            status: matchingDocuments.some((document) => document.status === 'approved') ? 'verified' : 'pending',
+            uploaded: matchingDocuments.length > 0,
+          };
+        }),
+      );
+      setError(null);
+      setLoading(false);
+    } catch (err) {
+      setError({
+        code: 'state_refresh_failed',
+        message: err instanceof Error ? err.message : 'Failed to refresh driver state',
+        timestamp: Date.now(),
+      });
+      setLoading(false);
     }
-    setCompletedTrips(completedTripsRes.error ? null : completedTripsRes.count ?? 0);
-    if (shiftsRes.error) {
-      setHoursOnlineToday(null);
-    } else {
-      const currentTimeMs = Date.now();
-      const dayStartMs = dayStart.getTime();
-      const onlineMilliseconds = (shiftsRes.data ?? []).reduce((total, shift) => {
-        const startedAtMs = Math.max(new Date(shift.started_at).getTime(), dayStartMs);
-        const endedAtMs = Math.min(shift.ended_at ? new Date(shift.ended_at).getTime() : currentTimeMs, currentTimeMs);
-        return total + Math.max(0, endedAtMs - startedAtMs);
-      }, 0);
-      setHoursOnlineToday(onlineMilliseconds / 3_600_000);
-    }
-    const documentRows = documentsRes.data ?? [];
-    setDriverDocuments(
-      REQUIRED_DRIVER_DOCUMENTS.map(({ type, docType }) => {
-        const matchingDocuments = documentRows.filter((document) => document.doc_type === docType);
-        return {
-          type,
-          status: matchingDocuments.some((document) => document.status === 'approved') ? 'verified' : 'pending',
-          uploaded: matchingDocuments.length > 0,
-        };
-      }),
-    );
-    setLoading(false);
   }, [driverId]);
 
   // Initial load + realtime subscription on the driver's own rows.
@@ -202,7 +221,14 @@ export function useDriverState(session: Session | null): DriverState {
   // Stream location while online; stop when offline or signed out.
   useEffect(() => {
     if (online && driverId) {
-      void startLocationStreaming(driverId).catch(() => {});
+      void startLocationStreaming(driverId).catch((err) => {
+        const locationErr = err instanceof LocationError ? err : null;
+        setError({
+          code: locationErr?.code === 'permission_denied' ? 'location_permission_denied' : 'location_push_failed',
+          message: err instanceof Error ? err.message : 'Location streaming failed',
+          timestamp: Date.now(),
+        });
+      });
       return () => stopLocationStreaming();
     }
     stopLocationStreaming();
@@ -211,16 +237,36 @@ export function useDriverState(session: Session | null): DriverState {
 
   const goOnline = useCallback(
     async (vId: string) => {
-      await api.driverGoOnline(vId);
-      await refresh();
+      try {
+        await api.driverGoOnline(vId);
+        await refresh();
+        setError(null);
+      } catch (err) {
+        setError({
+          code: 'api_error',
+          message: err instanceof Error ? err.message : 'Failed to go online',
+          timestamp: Date.now(),
+        });
+        throw err;
+      }
     },
     [refresh],
   );
 
   const goOffline = useCallback(async () => {
-    await api.driverGoOffline();
-    stopLocationStreaming();
-    await refresh();
+    try {
+      await api.driverGoOffline();
+      stopLocationStreaming();
+      await refresh();
+      setError(null);
+    } catch (err) {
+      setError({
+        code: 'api_error',
+        message: err instanceof Error ? err.message : 'Failed to go offline',
+        timestamp: Date.now(),
+      });
+      throw err;
+    }
   }, [refresh]);
 
   return {
@@ -234,9 +280,11 @@ export function useDriverState(session: Session | null): DriverState {
     driverDocuments,
     activeTrip,
     pendingOffer,
+    error,
     refresh,
     goOnline,
     goOffline,
+    clearError: () => setError(null),
   };
 }
 
