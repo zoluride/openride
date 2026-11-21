@@ -77,10 +77,12 @@ function SignedIn({ session }: { session: Session }) {
     return (
       <ActiveTripScreen
         trip={state.activeTrip}
+        error={state.error}
         onEvent={async (event, reason) => {
           await api.tripEvent(state.activeTrip!.id, event, reason);
           await state.refresh();
         }}
+        onClearError={state.clearError}
       />
     );
   }
@@ -111,10 +113,12 @@ function SignedIn({ session }: { session: Session }) {
       completedTripsToday={state.completedTripsToday}
       hoursOnlineToday={state.hoursOnlineToday}
       driverDocuments={state.driverDocuments}
+      error={state.error}
       onDocuments={() => setShowDocuments(true)}
       onGoOnline={state.goOnline}
       onGoOffline={state.goOffline}
       onReport={() => setShowReport(true)}
+      onClearError={state.clearError}
     />
   );
 }
@@ -209,8 +213,10 @@ function DevBypassHome({ onExit }: { onExit: () => void }) {
     return (
       <ActiveTripScreen
         trip={activeTrip}
-        onEvent={async (event) => {
-          if (event === 'arrived') {
+        onEvent={async (event, _reason) => {
+          if (event === 'en-route') {
+            setActiveTrip((trip) => (trip ? { ...trip, status: 'driver_en_route' } : trip));
+          } else if (event === 'arrived') {
             setActiveTrip((trip) => (trip ? { ...trip, status: 'arrived_at_pickup' } : trip));
           } else if (event === 'start') {
             setActiveTrip((trip) => (trip ? { ...trip, status: 'in_progress' } : trip));

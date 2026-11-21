@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ZoluLogo } from '../components/ZoluLogo';
 import { signOut } from '../lib/auth';
-import { fetchMyVehicles, type DriverDocument, type Vehicle } from '../lib/driver-state';
+import { fetchMyVehicles, type DriverDocument, type DriverError, type Vehicle } from '../lib/driver-state';
 
 interface DemoScenario {
   id: string;
@@ -64,6 +64,7 @@ interface Props {
   completedTripsToday: number | null;
   hoursOnlineToday: number | null;
   driverDocuments: DriverDocument[];
+  error?: DriverError | null;
   devPreview?: boolean;
   onDocuments: () => void;
   mockVehicles?: Vehicle[];
@@ -72,6 +73,7 @@ interface Props {
   onGoOffline: () => Promise<void>;
   onSimulateRideOffer?: () => void;
   onReport: () => void;
+  onClearError?: () => void;
 }
 
 export function HomeScreen({
@@ -83,6 +85,7 @@ export function HomeScreen({
   completedTripsToday,
   hoursOnlineToday,
   driverDocuments,
+  error,
   devPreview = false,
   onDocuments,
   mockVehicles,
@@ -91,6 +94,7 @@ export function HomeScreen({
   onGoOffline,
   onSimulateRideOffer,
   onReport,
+  onClearError,
 }: Props) {
   const [demoScenario, setDemoScenario] = useState<DemoScenario | null>(null);
   const currentGrossEarningsNaira = demoScenario?.grossEarningsNaira ?? grossEarningsNaira;
@@ -114,6 +118,11 @@ export function HomeScreen({
   const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles ?? []);
   const [selected, setSelected] = useState<string | null>(mockVehicles?.[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
+  const [showError, setShowError] = useState(error !== null);
+
+  useEffect(() => {
+    setShowError(error !== null);
+  }, [error]);
 
   useEffect(() => {
     if (mockVehicles) return;
@@ -151,6 +160,26 @@ export function HomeScreen({
       Alert.alert('Could not sign out', (e as Error).message || 'Please try again.');
     }
   }
+
+  useEffect(() => {
+    if (error && showError) {
+      const errorMessages: Record<string, string> = {
+        location_permission_denied: 'Location access denied. Enable location permissions to go online.',
+        location_push_failed: 'Failed to send your location. Check your connection and try again.',
+        state_refresh_failed: 'Failed to load your data. Check your connection and try again.',
+        api_error: 'An error occurred. Please try again.',
+      };
+      Alert.alert('Connection Issue', errorMessages[error.code] || error.message, [
+        {
+          text: 'Dismiss',
+          onPress: () => {
+            setShowError(false);
+            onClearError?.();
+          },
+        },
+      ]);
+    }
+  }, [error, showError, onClearError]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'right', 'bottom', 'left']}>
