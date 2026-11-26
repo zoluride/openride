@@ -1,10 +1,12 @@
 import { formatKobo } from '@openride/domain';
 import { colors, spacing, typography } from '@openride/ui';
+import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ActiveTrip, DriverError } from '../lib/driver-state';
+import { api } from '../lib/api';
 
 type Event = 'en-route' | 'arrived' | 'start' | 'complete' | 'cancel';
 
@@ -13,6 +15,7 @@ interface Props {
   error?: DriverError | null;
   onEvent: (event: Event, reason?: string) => Promise<void>;
   onClearError?: () => void;
+  onSOS?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -31,7 +34,7 @@ const CANCEL_REASONS = [
   'Other',
 ] as const;
 
-export function ActiveTripScreen({ trip, error, onEvent, onClearError }: Props) {
+export function ActiveTripScreen({ trip, error, onEvent, onClearError, onSOS }: Props) {
   const [busy, setBusy] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
@@ -41,6 +44,44 @@ export function ActiveTripScreen({ trip, error, onEvent, onClearError }: Props) 
   useEffect(() => {
     setShowError(error !== null);
   }, [error]);
+
+  async function handleSOS(): Promise<void> {
+    Alert.alert(
+      'Emergency Report',
+      'Report an emergency to support immediately. Your location will be included.',
+      [
+        { text: 'Cancel', onPress: () => {} },
+        {
+          text: 'Report Emergency',
+          onPress: async () => {
+            try {
+              const { status } = await Location.requestForegroundPermissionsAsync();
+              let locationLat: number | undefined;
+              let locationLng: number | undefined;
+              if (status === 'granted') {
+                const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+                locationLat = pos.coords.latitude;
+                locationLng = pos.coords.longitude;
+              }
+              await api.reportIncident({
+                category: 'safety',
+                severity: 'critical',
+                description: 'Emergency/SOS triggered during active trip',
+                trip_id: trip.id,
+                location_lat: locationLat,
+                location_lng: locationLng,
+              });
+              Alert.alert('Emergency reported', 'Support has been notified of your emergency.');
+              onSOS?.();
+            } catch (e) {
+              Alert.alert('Could not report emergency', (e as Error).message);
+            }
+          },
+          style: 'destructive',
+        },
+      ],
+    );
+  }
 
   useEffect(() => {
     if (error && showError) {
@@ -130,6 +171,9 @@ export function ActiveTripScreen({ trip, error, onEvent, onClearError }: Props) 
             <Text style={styles.cancelText}>Cancel trip</Text>
           </Pressable>
         )}
+        <Pressable style={styles.sos} onPress={() => void handleSOS()} disabled={busy}>
+          <Text style={styles.sosText}>🚨 Emergency / SOS</Text>
+        </Pressable>
       </View>
 
       <Modal visible={showCancelModal} animationType="slide" transparent onRequestClose={() => setShowCancelModal(false)}>
@@ -207,6 +251,8 @@ const styles = StyleSheet.create({
   buttonSecondaryText: { color: colors.text, fontWeight: '600', fontSize: typography.size.lg },
   cancel: { padding: spacing.md, alignItems: 'center' },
   cancelText: { color: colors.danger, fontWeight: '600' },
+  sos: { backgroundColor: colors.danger, padding: spacing.lg, borderRadius: 8, alignItems: 'center' },
+  sosText: { color: '#fff', fontWeight: '700', fontSize: typography.size.lg },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.xl },
   modalTitle: { fontSize: typography.size.lg, fontWeight: '700', marginBottom: spacing.lg },

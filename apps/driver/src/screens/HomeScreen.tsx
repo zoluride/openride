@@ -401,6 +401,15 @@ export function HomeScreen({
             <Text style={styles.buttonText}>{online ? 'Go offline' : 'Go online'}</Text>
           )}
         </Pressable>
+        {online && (
+          <Pressable
+            style={styles.sosButton}
+            onPress={() => onReport()}
+            disabled={busy}
+          >
+            <Text style={styles.sosButtonText}>🚨 Emergency Report</Text>
+          </Pressable>
+        )}
         {!devPreview && !compliance.compliant ? <Text style={styles.warning}>Verification Required</Text> : null}
       </View>
     </SafeAreaView>
@@ -481,11 +490,13 @@ const styles = StyleSheet.create({
   vehicle: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.md, marginBottom: spacing.sm },
   vehicleActive: { borderColor: colors.brandDark, backgroundColor: colors.surfaceMuted },
   vehicleRego: { fontSize: typography.size.md, fontWeight: '600' },
-  actions: { marginTop: 'auto' },
+  actions: { marginTop: 'auto', gap: spacing.sm },
   button: { padding: spacing.lg, borderRadius: 8, alignItems: 'center' },
   primary: { backgroundColor: colors.brandDark },
   danger: { backgroundColor: colors.danger },
   disabled: { opacity: 0.5 },
   warning: { color: colors.danger, fontSize: typography.size.sm, fontWeight: '600', textAlign: 'center' },
   buttonText: { color: '#fff', fontWeight: '600', fontSize: typography.size.lg },
+  sosButton: { backgroundColor: colors.danger, padding: spacing.lg, borderRadius: 8, alignItems: 'center' },
+  sosButtonText: { color: '#fff', fontWeight: '700', fontSize: typography.size.lg },
 });

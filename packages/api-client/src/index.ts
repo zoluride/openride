@@ -103,6 +103,19 @@ export class OpenrideApi {
     return this.invoke('trips-transition', { trip_id: tripId, event, reason });
   }
 
+  async reportIncident(req: {
+    category: string;
+    severity: string;
+    description: string;
+    trip_id?: string;
+    vehicle_id?: string;
+    location_lat?: number;
+    location_lng?: number;
+    attachments?: Array<{ path: string; mime_type: string }>;
+  }): Promise<{ id: string; ok: true }> {
+    return this.invoke('incident-report', req);
+  }
+
   private async invoke<T>(fnName: string, body: object): Promise<T> {
     const { data, error } = await this.client.functions.invoke<T>(fnName, {
       body: body as Record<string, unknown>,
