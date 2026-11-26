@@ -7,6 +7,7 @@ import { api } from './api';
 import type { DocumentFile } from './file-upload';
 import { LocationError, startLocationStreaming, stopLocationStreaming } from './location';
 import { supabase } from './supabase';
+import { retryPendingDrafts } from './offline-drafts';
 
 export interface Vehicle {
   id: string;
@@ -233,6 +234,14 @@ export function useDriverState(session: Session | null): DriverState {
       setDriverDocuments(mappedDocs);
       setError(null);
       setLoading(false);
+
+      // Attempt to retry any pending offline incident drafts
+      try {
+        await retryPendingDrafts(api.reportIncident.bind(api));
+      } catch (retryErr) {
+        console.warn('Error retrying incident drafts:', retryErr);
+        // Don't fail the entire refresh if retry fails
+      }
     } catch (err) {
       setError({
         code: 'state_refresh_failed',
